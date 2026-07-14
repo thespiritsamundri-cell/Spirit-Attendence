@@ -168,60 +168,59 @@ export default function Today() {
     setMsg("Verifying Secret Code...");
     const trimmedCode = secretCode.trim();
 
-    let verified = false;
-
-    // Try Supabase first — match by code column
+    // ── Build a merged pool of ALL known students ──────────────────────────
+    // Safe-parse local_students from localStorage
+    let localStudents: any[] = [];
     try {
-      const { data: codeMatch, error: e1 } = await supabase
-        .from("students")
-        .select("*")
-        .eq("code", trimmedCode);
+      const raw = localStorage.getItem("local_students");
+      if (raw) localStudents = JSON.parse(raw);
+    } catch {}
 
-      if (!e1 && codeMatch && codeMatch.length > 0) {
-        setStudent(codeMatch[0]);
-        setMsg("Verification successful.");
-        verified = true;
-      } else {
-        // Try secretCode column
-        const { data: scMatch, error: e2 } = await supabase
-          .from("students")
-          .select("*")
-          .eq("secretCode", trimmedCode);
+    // Hardcoded admin fallback (always present as safety net, both fields set)
+    const adminFallback = [
+      { id: "s1", name: "Ayan Ali", fatherName: "Muhammad Ali", classId: "c1", rollNumber: "10-A-01", code: "482917", secretCode: "482917" },
+      { id: "s2", name: "Zainab Fatima", fatherName: "Tariq Mahmood", classId: "c1", rollNumber: "10-A-02", code: "104928", secretCode: "104928" }
+    ];
 
-        if (!e2 && scMatch && scMatch.length > 0) {
-          setStudent(scMatch[0]);
+    // Merge: adminFallback → demoStudents → localStudents (last wins for same id)
+    const pool = new Map<string, any>();
+    [...adminFallback, ...demoStudents, ...localStudents].forEach(s => {
+      if (s?.id) pool.set(s.id, s);
+    });
+
+    // Helper: check if a student record matches the entered code
+    const codeMatches = (x: any) =>
+      x.code === trimmedCode ||
+      x.secretCode === trimmedCode ||
+      x.secret_code === trimmedCode;
+
+    // ── Try Supabase ───────────────────────────────────────────────────────
+    let verified = false;
+    try {
+      const { data, error } = await supabase.from("students").select("*");
+      if (!error && data && data.length > 0) {
+        // Merge Supabase results into pool too
+        data.forEach((s: any) => { if (s?.id) pool.set(s.id, s); });
+        const match = data.find(codeMatches);
+        if (match) {
+          setStudent(match);
           setMsg("Verification successful.");
           verified = true;
-        } else {
-          throw new Error("Student not found in database.");
         }
       }
-    } catch (e: any) {
-      if (!verified) {
-        console.warn("Supabase lookup failed, using local storage fallback:", e.message);
-      }
+    } catch (err: any) {
+      console.warn("Supabase query skipped, using local fallback:", err?.message);
     }
 
-    // Local storage fallback — match by secret code only
+    // ── Local fallback: search the merged pool ─────────────────────────────
     if (!verified) {
-      const localStudentsRaw = localStorage.getItem("local_students");
-      const localStudentsList = localStudentsRaw ? JSON.parse(localStudentsRaw) : demoStudents;
-
-      const s = localStudentsList.find(
-        (x: any) => x.code === trimmedCode || x.secretCode === trimmedCode
-      );
-
-      // Final fallback: check demo students
-      const demoMatch = s || demoStudents.find(
-        (x: any) => x.code === trimmedCode || x.secretCode === trimmedCode
-      );
-
-      if (demoMatch) {
-        setStudent(demoMatch);
+      const match = Array.from(pool.values()).find(codeMatches);
+      if (match) {
+        setStudent(match);
         setMsg("Verification successful.");
       } else {
         setStudent(null);
-        setMsg("❌ Authentication failed. Please double-check your Secret Code.");
+        setMsg("❌ Wrong Secret Code. Please check the 6-digit code shared by your admin.");
       }
     }
 

@@ -198,8 +198,9 @@ export default function Admin() {
       // Classes
       try {
         const { data, error } = await supabase.from("classes").select("*");
-        if (error || !data) throw error;
+        if (error || !data || data.length === 0) throw error || new Error("empty");
         setClasses(data);
+        localStorage.setItem("local_classes", JSON.stringify(data));
       } catch (e) {
         const local = localStorage.getItem("local_classes");
         const fallback = local ? JSON.parse(local) : [
@@ -213,14 +214,16 @@ export default function Admin() {
       // Subjects
       try {
         const { data, error } = await supabase.from("subjects").select("*");
-        if (error || !data) throw error;
+        if (error || !data || data.length === 0) throw error || new Error("empty");
         setSubjects(data);
+        localStorage.setItem("local_subjects", JSON.stringify(data));
       } catch (e) {
         const local = localStorage.getItem("local_subjects");
         const fallback = local ? JSON.parse(local) : [
-          { id: "sub1", name: "Science" },
-          { id: "sub2", name: "Math" },
-          { id: "sub3", name: "English" }
+          { id: "sub1", name: "Science" }, { id: "sub2", name: "Math" },
+          { id: "sub3", name: "English" }, { id: "sub4", name: "History" },
+          { id: "sub5", name: "Computer" }, { id: "sub6", name: "Urdu" },
+          { id: "sub7", name: "Islamiat" }, { id: "sub8", name: "Drawing" }
         ];
         setSubjects(fallback);
         localStorage.setItem("local_subjects", JSON.stringify(fallback));
@@ -229,8 +232,9 @@ export default function Admin() {
       // Teachers
       try {
         const { data, error } = await supabase.from("teachers").select("*");
-        if (error || !data) throw error;
+        if (error || !data || data.length === 0) throw error || new Error("empty");
         setTeachers(data);
+        localStorage.setItem("local_teachers", JSON.stringify(data));
       } catch (e) {
         const local = localStorage.getItem("local_teachers");
         const fallback = local ? JSON.parse(local) : [
@@ -244,13 +248,14 @@ export default function Admin() {
       // Students
       try {
         const { data, error } = await supabase.from("students").select("*");
-        if (error || !data) throw error;
+        if (error || !data || data.length === 0) throw error || new Error("empty");
         setStudents(data);
+        localStorage.setItem("local_students", JSON.stringify(data));
       } catch (e) {
         const local = localStorage.getItem("local_students");
         const fallback = local ? JSON.parse(local) : [
-          { id: "s1", name: "Ayan Ali", classId: "c1", fatherName: "Muhammad Ali", rollNumber: "10-A-01", code: "482917", attendance: "92%" },
-          { id: "s2", name: "Zainab Fatima", classId: "c1", fatherName: "Tariq Mahmood", rollNumber: "10-A-02", code: "104928", attendance: "95%" }
+          { id: "s1", name: "Ayan Ali", classId: "c1", fatherName: "Muhammad Ali", rollNumber: "10-A-01", code: "482917", secretCode: "482917", attendance: "92%" },
+          { id: "s2", name: "Zainab Fatima", classId: "c1", fatherName: "Tariq Mahmood", rollNumber: "10-A-02", code: "104928", secretCode: "104928", attendance: "95%" }
         ];
         setStudents(fallback);
         localStorage.setItem("local_students", JSON.stringify(fallback));
@@ -259,14 +264,17 @@ export default function Admin() {
       // Lecture Schedules
       try {
         const { data, error } = await supabase.from("lectures").select("*");
-        if (error || !data) throw error;
+        if (error || !data || data.length === 0) throw error || new Error("empty");
         setLectures(data);
+        localStorage.setItem("local_lectures", JSON.stringify(data));
       } catch (e) {
         const local = localStorage.getItem("local_lectures");
         const fallback = local ? JSON.parse(local) : [
           { id: "l1", number: 1, subject: "English", start: "08:00", end: "08:10", meetLink: "https://meet.google.com/demo-one" },
           { id: "l2", number: 2, subject: "Math", start: "08:45", end: "08:55", meetLink: "https://meet.google.com/demo-two" },
-          { id: "l3", number: 3, subject: "Science", start: "09:30", end: "09:40", meetLink: "https://meet.google.com/demo-three" }
+          { id: "l3", number: 3, subject: "Science", start: "09:30", end: "09:40", meetLink: "https://meet.google.com/demo-three" },
+          { id: "l4", number: 4, subject: "History", start: "10:15", end: "10:25", meetLink: "https://meet.google.com/demo-four" },
+          { id: "l5", number: 5, subject: "Computer", start: "11:00", end: "11:10", meetLink: "https://meet.google.com/demo-five" }
         ];
         setLectures(fallback);
         localStorage.setItem("local_lectures", JSON.stringify(fallback));
@@ -286,28 +294,35 @@ export default function Admin() {
         setSchoolInfo(JSON.parse(localSchool));
       }
 
-      // Attendance logs (Today checkins list with mock photos base64 configured)
+      // Attendance logs — load from Supabase first
       try {
-        const { data, error } = await supabase.from("attendance").select("*");
-        if (error || !data) throw error;
+        const { data, error } = await supabase.from("attendance").select("*").order("created_at", { ascending: false }).limit(200);
+        if (error || !data || data.length === 0) throw error || new Error("empty");
         setAttendanceLogs(data);
+        localStorage.setItem("local_attendance_logs", JSON.stringify(data));
       } catch (err) {
         const localLogs = localStorage.getItem("local_attendance_logs");
         const fallbackLogs = localLogs ? JSON.parse(localLogs) : [
           { id: "att1", studentName: "Ayan Ali", student_name: "Ayan Ali", class: "10-A", class_name: "10-A", lecture_number: 3, date: todayKey(), status: "Present", trust: "96%", trust_score: "96%", device_model: "Infinix Hot 30", photo: mockPhotoAyan, isVerified: null },
-          { id: "att2", studentName: "Zainab Fatima", student_name: "Zainab Fatima", class: "10-A", class_name: "10-A", lecture_number: 3, date: todayKey(), status: "Present", trust: "98%", trust_score: "98%", device_model: "Redmi Note 12", photo: mockPhotoZainab, isVerified: null },
-          { id: "att3", studentName: "Muhammad Hamza", student_name: "Muhammad Hamza", class: "9-B", class_name: "9-B", lecture_number: 3, date: todayKey(), status: "Present", trust: "72%", trust_score: "72%", device_model: "Infinix Hot 30", photo: "", isVerified: null }
+          { id: "att2", studentName: "Zainab Fatima", student_name: "Zainab Fatima", class: "10-A", class_name: "10-A", lecture_number: 3, date: todayKey(), status: "Present", trust: "98%", trust_score: "98%", device_model: "Redmi Note 12", photo: mockPhotoZainab, isVerified: null }
         ];
         setAttendanceLogs(fallbackLogs);
-        localStorage.setItem("local_attendance_logs", JSON.stringify(fallbackLogs));
       }
 
-      // Device approval registries
-      const mockDevices = [
-        { id: "d1", student: "Muhammad Hamza", class: "9-B", device: "Infinix Hot 30", date: "Today, 09:12 AM" },
-        { id: "d2", student: "Ayesha Bibi", class: "9-B", device: "Samsung Galaxy A32", date: "Today, 08:32 AM" }
-      ];
-      setDevices(mockDevices);
+      // Device approval registries — load from Supabase
+      try {
+        const { data, error } = await supabase.from("devices").select("*").eq("status", "Pending");
+        if (error || !data) throw error;
+        setDevices(data.length > 0 ? data : [
+          { id: "d1", student: "Muhammad Hamza", class: "9-B", device: "Infinix Hot 30", date: "Today, 09:12 AM" },
+          { id: "d2", student: "Ayesha Bibi", class: "9-B", device: "Samsung Galaxy A32", date: "Today, 08:32 AM" }
+        ]);
+      } catch {
+        setDevices([
+          { id: "d1", student: "Muhammad Hamza", class: "9-B", device: "Infinix Hot 30", date: "Today, 09:12 AM" },
+          { id: "d2", student: "Ayesha Bibi", class: "9-B", device: "Samsung Galaxy A32", date: "Today, 08:32 AM" }
+        ]);
+      }
 
       const localApprovedDevices = localStorage.getItem("local_approved_devices");
       const fallbackApproved = localApprovedDevices ? JSON.parse(localApprovedDevices) : [
