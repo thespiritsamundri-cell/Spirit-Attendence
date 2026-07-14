@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect } from "react";
-import { CheckCircle2, ShieldAlert, MapPin, Camera, Smartphone, Clock, ArrowLeft, ShieldCheck, Sun, Moon, User, Check } from "lucide-react";
+import { CheckCircle2, ShieldAlert, MapPin, Camera, Smartphone, Clock, ArrowLeft, ShieldCheck, Sun, Moon, User, Check, X } from "lucide-react";
 import Link from "next/link";
 import { school, demoStudents } from "@/lib/mock";
 import { capturePhotoBlob, getActiveLecture, getDeviceInfo, getGps, todayKey, trustScore } from "@/lib/attendance";
@@ -22,6 +22,11 @@ export default function Today() {
   // Secret Code login state (roll number removed — code-only login)
   const [secretCode, setSecretCode] = useState("");
   const [student, setStudent] = useState<any>(null);
+
+  // Student Profile Editing State
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", fatherName: "", mobile: "", profilePhoto: "" });
+  const [snappingPhoto, setSnappingPhoto] = useState(false);
 
   // Dynamic lists for matching Teacher Name
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -227,6 +232,81 @@ export default function Today() {
     setBusy(false);
   }
 
+  const openEditProfile = () => {
+    setEditForm({
+      name: student.name || "",
+      fatherName: student.fatherName || student.father_name || "",
+      mobile: student.mobile || "",
+      profilePhoto: student.profilePhoto || student.profile_photo || ""
+    });
+    setShowEditProfile(true);
+  };
+
+  const handleSnapProfilePhoto = async () => {
+    setSnappingPhoto(true);
+    try {
+      const blob = await capturePhotoBlob();
+      if (blob && blob.size > 0) {
+        const base64 = await blobToBase64(blob);
+        setEditForm(prev => ({ ...prev, profilePhoto: base64 }));
+      }
+    } catch (err: any) {
+      console.warn("Failed to snap profile picture:", err?.message);
+      alert("⚠️ Camera access failed or was denied.");
+    } finally {
+      setSnappingPhoto(false);
+    }
+  };
+
+  const saveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("Saving updated profile details to database...");
+
+    const updatedFields = {
+      name: editForm.name,
+      fatherName: editForm.fatherName,
+      mobile: editForm.mobile,
+      profilePhoto: editForm.profilePhoto
+    };
+
+    try {
+      const { error } = await supabase
+        .from("students")
+        .update({
+          name: updatedFields.name,
+          fatherName: updatedFields.fatherName,
+          mobile: updatedFields.mobile,
+          profilePhoto: updatedFields.profilePhoto
+        })
+        .eq("id", student.id);
+
+      if (error) throw error;
+      setMsg("Profile changes saved to database.");
+    } catch (err: any) {
+      console.warn("Supabase update failed, saving locally:", err?.message);
+    }
+
+    try {
+      const raw = localStorage.getItem("local_students");
+      if (raw) {
+        const localList = JSON.parse(raw);
+        const updatedList = localList.map((x: any) =>
+          x.id === student.id ? { ...x, ...updatedFields } : x
+        );
+        localStorage.setItem("local_students", JSON.stringify(updatedList));
+      }
+    } catch {}
+
+    setStudent((prev: any) => ({
+      ...prev,
+      ...updatedFields
+    }));
+
+    setShowEditProfile(false);
+    setBusy(false);
+  };
+
   async function submit() {
     if (!student || !agree || isPastCheckinLimit) return;
     setBusy(true);
@@ -409,14 +489,41 @@ export default function Today() {
             <div className="space-y-5 animate-in fade-in duration-300">
               
               {/* Verified student profile details */}
-              <div className="rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 p-4 border dark:border-neutral-850">
-                <p className="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-widest font-extrabold flex items-center gap-1">
-                  <Check size={12} /> Student Session Verified
-                </p>
-                <h4 className="font-extrabold text-lg mt-1 text-neutral-900 dark:text-white">{student.name}</h4>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Roll: <span className="font-mono font-semibold">{student.rollNumber || student.roll_number}</span> • Class {student.class || student.class_name || "10-A"}
-                </p>
+              <div className="rounded-2xl bg-neutral-50 dark:bg-neutral-900/60 p-5 border dark:border-neutral-850 flex justify-between items-center gap-4">
+                <div>
+                  <p className="text-[10px] text-green-600 dark:text-green-400 uppercase tracking-widest font-extrabold flex items-center gap-1">
+                    <Check size={12} /> Student Session Verified
+                  </p>
+                  <h4 className="font-extrabold text-lg mt-1 text-neutral-900 dark:text-white">{student.name}</h4>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    Roll: <span className="font-mono font-semibold">{student.rollNumber || student.roll_number}</span> • Class {student.class || student.class_name || "10-A"}
+                  </p>
+                  {student.mobile && (
+                    <p className="text-[11px] text-neutral-400 mt-1">
+                      Mobile: <span className="font-mono">{student.mobile}</span>
+                    </p>
+                  )}
+                  {student.fatherName && (
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      Father: <span>{student.fatherName}</span>
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  {student.profilePhoto || student.profile_photo ? (
+                    <img src={student.profilePhoto || student.profile_photo} alt="Profile" className="w-14 h-14 rounded-full object-cover border border-neutral-350 dark:border-neutral-700 shadow-sm" />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-lg border border-blue-200 dark:border-blue-900/40 shadow-inner">
+                      {student.name.charAt(0)}
+                    </div>
+                  )}
+                  <button
+                    onClick={openEditProfile}
+                    className="text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 bg-white dark:bg-neutral-800 border dark:border-neutral-700 px-2 py-1 rounded-lg shadow-sm"
+                  >
+                    ✏️ Edit Profile
+                  </button>
+                </div>
               </div>
 
               {/* Ongoing Lecture Schedule detail with Instructor Name */}
@@ -487,6 +594,101 @@ export default function Today() {
           )}
         </div>
       </div>
+
+      {/* Student Edit Profile Modal Overlay */}
+      {showEditProfile && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 text-neutral-900 dark:text-neutral-50">
+          <div className="w-full max-w-md rounded-3xl bg-white dark:bg-neutral-900 border border-white/20 p-6 shadow-2xl animate-in scale-in duration-200">
+            <div className="flex justify-between items-center border-b dark:border-neutral-800 pb-3 mb-4">
+              <h3 className="font-extrabold text-lg">Update Profile Details</h3>
+              <button onClick={() => setShowEditProfile(false)} className="rounded-full p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <form onSubmit={saveProfile} className="space-y-4">
+              <div className="flex flex-col items-center gap-2 mb-2">
+                <div className="relative group">
+                  {editForm.profilePhoto ? (
+                    <img src={editForm.profilePhoto} alt="Preview" className="w-20 h-20 rounded-full object-cover border-2 border-blue-500 shadow-md" />
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-600 dark:text-blue-400 font-bold text-2xl border-2 border-blue-200 dark:border-blue-900/40 shadow-inner">
+                      {editForm.name ? editForm.name.charAt(0) : "S"}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSnapProfilePhoto}
+                    disabled={snappingPhoto}
+                    className="absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 shadow-md border border-white"
+                    title="Take profile picture"
+                  >
+                    <Camera size={14} />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSnapProfilePhoto}
+                  disabled={snappingPhoto}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {snappingPhoto ? "Initializing camera..." : "📸 Take New Photo"}
+                </button>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Full Name</label>
+                <input
+                  required
+                  type="text"
+                  value={editForm.name}
+                  onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 outline-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Father's Name</label>
+                <input
+                  required
+                  type="text"
+                  value={editForm.fatherName}
+                  onChange={e => setEditForm({ ...editForm, fatherName: e.target.value })}
+                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 outline-blue-550"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Mobile Number</label>
+                <input
+                  type="tel"
+                  placeholder="e.g. +92 300 1234567"
+                  value={editForm.mobile}
+                  onChange={e => setEditForm({ ...editForm, mobile: e.target.value })}
+                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 font-mono outline-blue-500"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditProfile(false)}
+                  className="w-1/2 rounded-xl bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-bold py-3 text-sm transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="w-1/2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 text-sm transition-colors shadow-md disabled:opacity-50"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

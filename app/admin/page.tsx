@@ -125,6 +125,18 @@ export default function Admin() {
     return `${prefix}${nextNum}`;
   };
 
+  // Helper: Format 24-hour time string (HH:MM) to 12-hour AM/PM string
+  const formatTime12h = (time24: string) => {
+    if (!time24) return "N/A";
+    const parts = time24.split(":");
+    const hours = parseInt(parts[0], 10);
+    if (isNaN(hours)) return time24;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const hours12 = hours % 12 || 12;
+    const minutes = parts[1] || "00";
+    return `${hours12.toString().padStart(2, "0")}:${minutes} ${ampm}`;
+  };
+
   const [lectureForm, setLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "" });
   const [editLectureForm, setEditLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "" });
   const [notificationForm, setNotificationForm] = useState({ title: "", message: "", targetClass: "All Classes" });
@@ -427,8 +439,19 @@ export default function Admin() {
     // Ensure roll number and code are filled (they should be auto-generated)
     const finalRoll = studentForm.rollNumber || generateRollNumber(studentForm.classId);
     const finalCode = studentForm.secretCode || generateSecretCode();
+    // Generate sequential ID: s1, s2, s3, etc.
+    let maxNum = 0;
+    students.forEach((s: any) => {
+      const match = s.id?.match(/^s(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+    const nextId = `s${maxNum + 1}`;
+
     const newStudent = {
-      id: "s_" + Date.now().toString().slice(-4),
+      id: nextId,
       name: studentForm.name,
       fatherName: studentForm.fatherName,
       classId: studentForm.classId,
@@ -1254,8 +1277,8 @@ export default function Admin() {
                     <tr key={l.id} className="border-b dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                       <td className="py-3 px-4 font-bold">{l.number}</td>
                       <td className="py-3 px-4 font-semibold">{l.subject || "No Subject Assigned"}</td>
-                      <td className="py-3 px-4 font-mono">{l.start}</td>
-                      <td className="py-3 px-4 font-mono">{l.end}</td>
+                      <td className="py-3 px-4 font-mono">{formatTime12h(l.start)}</td>
+                      <td className="py-3 px-4 font-mono">{formatTime12h(l.end)}</td>
                       <td className="py-3 px-4">
                         {l.meetLink ? (
                           <a href={l.meetLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[200px] block font-mono">
@@ -2209,12 +2232,12 @@ export default function Admin() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Start Time (HH:MM)</label>
-                <input required type="text" placeholder="09:30" value={lectureForm.start} onChange={e => setLectureForm({ ...lectureForm, start: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-500 dark:border-neutral-800" />
+                <label className="text-xs font-bold uppercase text-neutral-400">Start Time</label>
+                <input required type="time" value={lectureForm.start} onChange={e => setLectureForm({ ...lectureForm, start: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-500 dark:border-neutral-800" />
               </div>
               <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">End Time (HH:MM)</label>
-                <input required type="text" placeholder="09:40" value={lectureForm.end} onChange={e => setLectureForm({ ...lectureForm, end: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
+                <label className="text-xs font-bold uppercase text-neutral-400">End Time</label>
+                <input required type="time" value={lectureForm.end} onChange={e => setLectureForm({ ...lectureForm, end: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
               </div>
             </div>
             <div>
@@ -2245,12 +2268,12 @@ export default function Admin() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Start Time (HH:MM)</label>
-                <input required type="text" placeholder="09:30" value={editLectureForm.start} onChange={e => setEditLectureForm({ ...editLectureForm, start: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
+                <label className="text-xs font-bold uppercase text-neutral-400">Start Time</label>
+                <input required type="time" value={editLectureForm.start} onChange={e => setEditLectureForm({ ...editLectureForm, start: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
               </div>
               <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">End Time (HH:MM)</label>
-                <input required type="text" placeholder="09:40" value={editLectureForm.end} onChange={e => setEditLectureForm({ ...editLectureForm, end: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
+                <label className="text-xs font-bold uppercase text-neutral-400">End Time</label>
+                <input required type="time" value={editLectureForm.end} onChange={e => setEditLectureForm({ ...editLectureForm, end: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
               </div>
             </div>
             <div>
