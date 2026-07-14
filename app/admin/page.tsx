@@ -108,6 +108,21 @@ export default function Admin() {
   const [teacherForm, setTeacherForm] = useState({ name: "", subjectId: "" });
   const [subjectForm, setSubjectForm] = useState({ name: "" });
   const [studentForm, setStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
+
+  // Helper: generate a 6-digit secret code
+  const generateSecretCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Helper: compute next roll number for a given classId
+  const generateRollNumber = (classId: string) => {
+    if (!classId) return "";
+    const cls = classes.find((c: any) => c.id === classId);
+    if (!cls) return "";
+    const prefix = `${cls.name}-${cls.section}-`;
+    const existingInClass = students.filter((s: any) => s.classId === classId);
+    const nextNum = (existingInClass.length + 1).toString().padStart(2, "0");
+    return `${prefix}${nextNum}`;
+  };
+
   const [lectureForm, setLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "" });
   const [editLectureForm, setEditLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "" });
   const [notificationForm, setNotificationForm] = useState({ title: "", message: "", targetClass: "All Classes" });
@@ -392,13 +407,17 @@ export default function Admin() {
 
   const addStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Ensure roll number and code are filled (they should be auto-generated)
+    const finalRoll = studentForm.rollNumber || generateRollNumber(studentForm.classId);
+    const finalCode = studentForm.secretCode || generateSecretCode();
     const newStudent = {
       id: "s_" + Date.now().toString().slice(-4),
       name: studentForm.name,
       fatherName: studentForm.fatherName,
       classId: studentForm.classId,
-      rollNumber: studentForm.rollNumber,
-      code: studentForm.secretCode,
+      rollNumber: finalRoll,
+      code: finalCode,
+      secretCode: finalCode,
       attendance: "100%"
     };
 
@@ -412,6 +431,7 @@ export default function Admin() {
     const updated = [...students, newStudent];
     setStudents(updated);
     localStorage.setItem("local_students", JSON.stringify(updated));
+    setAlerts(prev => [`New student "${newStudent.name}" registered with Roll No: ${finalRoll} and Secret Code: ${finalCode}`, ...prev]);
     setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
     setShowAddStudent(false);
   };
@@ -1983,7 +2003,7 @@ export default function Admin() {
 
       {/* Add Student Modal */}
       {showAddStudent && (
-        <Modal title="Register Student" onClose={() => setShowAddStudent(false)}>
+        <Modal title="Register Student" onClose={() => { setShowAddStudent(false); setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" }); }}>
           <form onSubmit={addStudent} className="space-y-4">
             <div>
               <label className="text-xs font-bold uppercase text-neutral-400">Full Name</label>
@@ -1993,24 +2013,66 @@ export default function Admin() {
               <label className="text-xs font-bold uppercase text-neutral-400">Father's Name</label>
               <input required type="text" placeholder="Muhammad Ali" value={studentForm.fatherName} onChange={e => setStudentForm({ ...studentForm, fatherName: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Classroom Grade</label>
-                <select required value={studentForm.classId} onChange={e => setStudentForm({ ...studentForm, classId: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800">
-                  <option value="">-- Select Class --</option>
-                  {classes.map(c => <option key={c.id} value={c.id}>Class {c.name}-{c.section}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Roll Number</label>
-                <input required type="text" placeholder="10-A-01" value={studentForm.rollNumber} onChange={e => setStudentForm({ ...studentForm, rollNumber: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Classroom Grade</label>
+              <select
+                required
+                value={studentForm.classId}
+                onChange={e => {
+                  const newClassId = e.target.value;
+                  const autoRoll = generateRollNumber(newClassId);
+                  const autoCode = studentForm.secretCode || generateSecretCode();
+                  setStudentForm({ ...studentForm, classId: newClassId, rollNumber: autoRoll, secretCode: autoCode });
+                }}
+                className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800"
+              >
+                <option value="">-- Select Class --</option>
+                {classes.map(c => <option key={c.id} value={c.id}>Class {c.name}-{c.section}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400 flex items-center justify-between">
+                <span>Roll Number <span className="text-blue-500 normal-case font-medium">(Auto-generated)</span></span>
+              </label>
+              <div className="relative mt-1">
+                <input
+                  readOnly
+                  type="text"
+                  value={studentForm.rollNumber || (studentForm.classId ? generateRollNumber(studentForm.classId) : "Select a class first")}
+                  className="w-full rounded-xl border bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900/40 p-3 font-mono text-blue-700 dark:text-blue-300 outline-none cursor-not-allowed"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-blue-500 font-bold uppercase tracking-wider">Auto</span>
               </div>
             </div>
             <div>
-              <label className="text-xs font-bold uppercase text-neutral-400">Access Passcode (6 digits)</label>
-              <input required type="text" maxLength={6} placeholder="482917" value={studentForm.secretCode} onChange={e => setStudentForm({ ...studentForm, secretCode: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-500 dark:border-neutral-800" />
+              <label className="text-xs font-bold uppercase text-neutral-400 flex items-center justify-between">
+                <span>Secret Code <span className="text-green-600 normal-case font-medium">(Auto-generated)</span></span>
+                <button
+                  type="button"
+                  onClick={() => setStudentForm({ ...studentForm, secretCode: generateSecretCode() })}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded-lg"
+                >
+                  ↺ Regenerate
+                </button>
+              </label>
+              <div className="relative mt-1">
+                <input
+                  readOnly
+                  type="text"
+                  value={studentForm.secretCode || "Click Regenerate or select a class"}
+                  className="w-full rounded-xl border bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900/40 p-3 font-mono text-lg tracking-widest text-green-700 dark:text-green-300 outline-none cursor-not-allowed"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-green-600 font-bold uppercase tracking-wider">6-digit PIN</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-1.5">📋 Please note this code — share it with the student. It cannot be recovered later without regenerating.</p>
             </div>
-            <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Student Profile</button>
+            <button
+              type="submit"
+              disabled={!studentForm.classId || !studentForm.name || !studentForm.fatherName}
+              className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save Student Profile
+            </button>
           </form>
         </Modal>
       )}

@@ -19,8 +19,7 @@ export default function Today() {
   const [activeLecture, setActiveLecture] = useState<any>(null);
   const [isPastCheckinLimit, setIsPastCheckinLimit] = useState(false);
 
-  // Roll Number & Secret Code login state
-  const [rollNumber, setRollNumber] = useState("");
+  // Secret Code login state (roll number removed — code-only login)
   const [secretCode, setSecretCode] = useState("");
   const [student, setStudent] = useState<any>(null);
 
@@ -166,48 +165,67 @@ export default function Today() {
   async function verifyStudentDetails(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setMsg("Verifying Roll Number and Secret Code...");
-    const trimmedRoll = rollNumber.trim();
+    setMsg("Verifying Secret Code...");
     const trimmedCode = secretCode.trim();
 
+    let verified = false;
+
+    // Try Supabase first — match by code column
     try {
-      const { data, error } = await supabase
+      const { data: codeMatch, error: e1 } = await supabase
         .from("students")
         .select("*")
-        .or(`code.eq.${trimmedCode},secretCode.eq.${trimmedCode}`)
-        .single();
+        .eq("code", trimmedCode);
 
-      if (error || !data) throw error || new Error("Student not found");
+      if (!e1 && codeMatch && codeMatch.length > 0) {
+        setStudent(codeMatch[0]);
+        setMsg("Verification successful.");
+        verified = true;
+      } else {
+        // Try secretCode column
+        const { data: scMatch, error: e2 } = await supabase
+          .from("students")
+          .select("*")
+          .eq("secretCode", trimmedCode);
 
-      const dbRoll = data.rollNumber || data.roll_number || "";
-      if (dbRoll.trim().toLowerCase() !== trimmedRoll.toLowerCase()) {
-        throw new Error("Secret code and Roll number do not match.");
+        if (!e2 && scMatch && scMatch.length > 0) {
+          setStudent(scMatch[0]);
+          setMsg("Verification successful.");
+          verified = true;
+        } else {
+          throw new Error("Student not found in database.");
+        }
       }
-
-      setStudent(data);
-      setMsg("Verification successful.");
     } catch (e: any) {
-      console.warn("Supabase lookup failed, trying local demo database fallback:", e);
+      if (!verified) {
+        console.warn("Supabase lookup failed, using local storage fallback:", e.message);
+      }
+    }
 
+    // Local storage fallback — match by secret code only
+    if (!verified) {
       const localStudentsRaw = localStorage.getItem("local_students");
       const localStudentsList = localStudentsRaw ? JSON.parse(localStudentsRaw) : demoStudents;
 
       const s = localStudentsList.find(
-        (x: any) =>
-          (x.code === trimmedCode || x.secretCode === trimmedCode) &&
-          (x.rollNumber || "").trim().toLowerCase() === trimmedRoll.toLowerCase()
+        (x: any) => x.code === trimmedCode || x.secretCode === trimmedCode
       );
 
-      if (s) {
-        setStudent(s);
+      // Final fallback: check demo students
+      const demoMatch = s || demoStudents.find(
+        (x: any) => x.code === trimmedCode || x.secretCode === trimmedCode
+      );
+
+      if (demoMatch) {
+        setStudent(demoMatch);
         setMsg("Verification successful.");
       } else {
         setStudent(null);
-        setMsg("Authentication failed. Check your Roll Number and Secret Code.");
+        setMsg("❌ Authentication failed. Please double-check your Secret Code.");
       }
-    } finally {
-      setBusy(false);
     }
+
+    setBusy(false);
   }
 
   async function submit() {
@@ -360,39 +378,29 @@ export default function Today() {
             </div>
           )}
 
-          {/* STEP 2: ROLL NUMBER & SECRET CODE OVERLAY */}
+          {/* STEP 2: SECRET CODE LOGIN */}
           {currentStep === 2 && (
-            <form onSubmit={verifyStudentDetails} className="space-y-4 animate-in fade-in duration-300">
-              <p className="text-xs text-neutral-500">Please enter your registration credentials to load active course schedules.</p>
+            <form onSubmit={verifyStudentDetails} className="space-y-5 animate-in fade-in duration-300">
+              <p className="text-xs text-neutral-500 leading-relaxed">Enter your 6-digit Secret Code to load your session and active schedule.</p>
               <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Roll Number</label>
-                <input
-                  required
-                  type="text"
-                  placeholder="e.g. 10-A-01"
-                  value={rollNumber}
-                  onChange={e => setRollNumber(e.target.value)}
-                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3.5 outline-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Secret PIN Code</label>
+                <label className="text-xs font-bold uppercase text-neutral-400 tracking-wider">Secret PIN Code</label>
                 <input
                   required
                   type="password"
                   maxLength={6}
-                  placeholder="******"
+                  placeholder="••••••"
                   value={secretCode}
                   onChange={e => setSecretCode(e.target.value)}
-                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3.5 font-mono tracking-widest outline-blue-500"
+                  className="w-full mt-2 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-4 font-mono text-xl tracking-[0.4em] text-center outline-blue-500"
                 />
+                <p className="text-[11px] text-neutral-400 mt-1.5 text-center">Your secret code was provided to you by the admin.</p>
               </div>
               <button
                 type="submit"
-                disabled={busy || !rollNumber || !secretCode}
+                disabled={busy || !secretCode}
                 className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 transition-colors disabled:opacity-50"
               >
-                Verify Student Profile
+                {busy ? "Verifying..." : "Verify & Continue"}
               </button>
             </form>
           )}
