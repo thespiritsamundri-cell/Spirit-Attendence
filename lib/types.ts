@@ -1,0 +1,4 @@
+export type Lecture={number:number; start:string; end:string; meetLink:string; subject?:string; teacher?:string};
+export type Student={id:string; secretCode:string; name:string; fatherName:string; className:string; section:string; rollNumber:string; mobile?:string; profilePhoto?:string; registeredDeviceId?:string; registeredDeviceDate?:string; blockedDevices?:string[]};
+export type SchoolSettings={name:string;logoUrl?:string;address:string;phone:string;website:string;email:string;welcomeMessage:string;themeColor:string;lectures:Lecture[]};
+export type AttendanceRecord={studentId:string;schoolId:string;date:string;lectureNumber:number;status:"present"|"late"|"rejected";photoUrl:string;gps:{lat:number;lng:number;accuracy:number;mapsLink:string};device:any;ip?:string;trustScore:number;createdAt:any};
