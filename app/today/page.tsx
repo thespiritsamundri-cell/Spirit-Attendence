@@ -62,28 +62,26 @@ export default function Today() {
       }
     }
 
-    const checkLectures = () => {
-      const localLec = localStorage.getItem("local_lectures");
-      const list = localLec ? JSON.parse(localLec) : school.lectures;
+    const checkLectures = async () => {
+      let list = [];
+      try {
+        const { data, error } = await supabase.from("lectures").select("*");
+        if (!error && data && data.length > 0) {
+          list = data;
+          localStorage.setItem("local_lectures", JSON.stringify(data));
+        } else {
+          throw new Error("No database records");
+        }
+      } catch (err) {
+        const localLec = localStorage.getItem("local_lectures");
+        list = localLec ? JSON.parse(localLec) : school.lectures;
+      }
+
       setAllLectures(list);
 
       const active = getActiveLecture(list);
       setActiveLecture(active);
-
-      if (active) {
-        const now = new Date();
-        const nowMins = now.getHours() * 60 + now.getMinutes();
-        const [sh, sm] = active.start.split(":").map(Number);
-        const startMins = sh * 60 + sm;
-
-        if (nowMins > startMins + 10) {
-          setIsPastCheckinLimit(true);
-        } else {
-          setIsPastCheckinLimit(false);
-        }
-      } else {
-        setIsPastCheckinLimit(false);
-      }
+      setIsPastCheckinLimit(false); // Enable check-in at any time during the active scheduled window
     };
 
     checkLectures();
@@ -255,6 +253,17 @@ export default function Today() {
       alert("⚠️ Camera access failed or was denied.");
     } finally {
       setSnappingPhoto(false);
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditForm(prev => ({ ...prev, profilePhoto: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -626,14 +635,26 @@ export default function Today() {
                     <Camera size={14} />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSnapProfilePhoto}
-                  disabled={snappingPhoto}
-                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  {snappingPhoto ? "Initializing camera..." : "📸 Take New Photo"}
-                </button>
+                <div className="flex gap-4 items-center mt-1">
+                  <button
+                    type="button"
+                    onClick={handleSnapProfilePhoto}
+                    disabled={snappingPhoto}
+                    className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                  >
+                    {snappingPhoto ? "Initializing..." : "📸 Take Photo"}
+                  </button>
+                  <span className="text-neutral-300 dark:text-neutral-700">|</span>
+                  <label className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-1">
+                    📁 Upload Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
 
               <div>

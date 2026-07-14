@@ -102,6 +102,9 @@ export default function Admin() {
   const [showAddLecture, setShowAddLecture] = useState(false);
   const [showEditLecture, setShowEditLecture] = useState<any>(null);
   const [viewLectureAttendance, setViewLectureAttendance] = useState<any>(null); // holds lecture object for presents/absents modal
+  const [viewTeacherDetails, setViewTeacherDetails] = useState<any>(null);
+  const [viewStudentDetails, setViewStudentDetails] = useState<any>(null);
+  const [studentMonthFilter, setStudentMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
 
   // Form Inputs
   const [classForm, setClassForm] = useState({ name: "", section: "" });
@@ -1159,7 +1162,14 @@ export default function Admin() {
                         <td className="py-3 px-4 font-mono font-bold text-blue-600">{t.id}</td>
                         <td className="py-3 px-4 font-semibold">{t.name}</td>
                         <td className="py-3 px-4">{subject ? subject.name : "N/A"}</td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-3 px-4 text-right flex justify-end gap-3 items-center">
+                          <button
+                            title="View teacher class attendance logs"
+                            onClick={() => setViewTeacherDetails(t)}
+                            className="bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 p-1.5 rounded-lg hover:scale-105 transition-transform"
+                          >
+                            <BarChart3 size={14} />
+                          </button>
                           <button onClick={() => deleteItem("teachers", t.id, setTeachers, "local_teachers")} className="text-red-500 hover:text-red-700">
                             <Trash2 size={16} />
                           </button>
@@ -1229,6 +1239,13 @@ export default function Admin() {
                             className="text-neutral-500 hover:text-neutral-800 dark:hover:text-white"
                           >
                             <Printer size={16} />
+                          </button>
+                          <button
+                            title="View student complete details"
+                            onClick={() => setViewStudentDetails(s)}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            <Eye size={16} />
                           </button>
                           <button
                             title="Edit student profile"
@@ -2284,6 +2301,169 @@ export default function Admin() {
           </form>
         </Modal>
       )}
+
+      {/* Teacher Attendance Logs Modal */}
+      {viewTeacherDetails && (() => {
+        const subject = subjects.find(sub => sub.id === viewTeacherDetails.subjectId);
+        const subjectName = subject ? subject.name : "N/A";
+        
+        const teacherLogs = attendanceLogs.filter(log =>
+          (log.subject || "").toLowerCase() === subjectName.toLowerCase()
+        );
+        
+        const groupKey = (log: any) => `${log.date}_Lec${log.lecture_number}`;
+        const groupedLogs: { [key: string]: { date: string, lec: number, presents: number } } = {};
+        
+        teacherLogs.forEach(log => {
+          const key = groupKey(log);
+          if (!groupedLogs[key]) {
+            groupedLogs[key] = { date: log.date, lec: log.lecture_number, presents: 0 };
+          }
+          if (log.status === "Present") {
+            groupedLogs[key].presents += 1;
+          }
+        });
+        
+        const logsList = Object.values(groupedLogs).sort((a, b) => b.date.localeCompare(a.date));
+
+        return (
+          <Modal title={`Attendance logs: ${viewTeacherDetails.name}`} onClose={() => setViewTeacherDetails(null)}>
+            <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+              <div className="p-3 bg-neutral-50 dark:bg-neutral-900 rounded-xl text-xs space-y-1">
+                <p>Instructor: <span className="font-bold">{viewTeacherDetails.name}</span></p>
+                <p>Subject: <span className="font-bold text-blue-600 dark:text-blue-400">{subjectName}</span></p>
+                <p>Total logged checks: <span className="font-bold">{teacherLogs.length}</span></p>
+              </div>
+
+              {logsList.length === 0 ? (
+                <p className="text-xs text-neutral-400 italic text-center py-4">No student check-ins recorded for this instructor's classes.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  <h4 className="text-xs font-bold uppercase text-neutral-400">Class Sessions History</h4>
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b dark:border-neutral-800 text-neutral-500">
+                        <th className="py-2">Date</th>
+                        <th className="py-2">Lecture</th>
+                        <th className="py-2 text-right">Presents Count</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logsList.map((item, idx) => (
+                        <tr key={idx} className="border-b dark:border-neutral-850 py-2">
+                          <td className="py-2 font-mono">{item.date}</td>
+                          <td className="py-2 font-semibold">Lecture {item.lec}</td>
+                          <td className="py-2 text-right font-bold text-green-600 dark:text-green-400">{item.presents} Present</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </Modal>
+        );
+      })()}
+
+      {/* Student Details & Analytics Modal */}
+      {viewStudentDetails && (() => {
+        const studentClass = classes.find(c => c.id === viewStudentDetails.classId);
+        const className = studentClass ? `${studentClass.name}-${studentClass.section}` : "N/A";
+        
+        const studentLogs = attendanceLogs.filter(log =>
+          log.student_id === viewStudentDetails.id
+        );
+        
+        const filteredLogs = studentLogs.filter(log =>
+          log.date && log.date.startsWith(studentMonthFilter)
+        );
+
+        const totalPresent = studentLogs.filter(l => l.status === "Present").length;
+        const totalAbsent = studentLogs.filter(l => l.status === "Absent").length;
+        const totalLectures = totalPresent + totalAbsent || 1;
+        const rate = Math.round((totalPresent / totalLectures) * 100);
+
+        return (
+          <Modal title="Student Profile & Analytics" onClose={() => setViewStudentDetails(null)}>
+            <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+              
+              <div className="flex gap-4 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-2xl border dark:border-neutral-800">
+                {viewStudentDetails.profilePhoto || viewStudentDetails.profile_photo ? (
+                  <img src={viewStudentDetails.profilePhoto || viewStudentDetails.profile_photo} alt="Profile" className="w-20 h-20 rounded-full object-cover border border-neutral-350 dark:border-neutral-700 shadow-sm shrink-0" />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 font-bold text-3xl border border-blue-200 shrink-0">
+                    {viewStudentDetails.name.charAt(0)}
+                  </div>
+                )}
+                <div className="space-y-1 text-xs">
+                  <h4 className="text-sm font-extrabold text-neutral-900 dark:text-white">{viewStudentDetails.name}</h4>
+                  <p>Father: <span className="font-semibold">{viewStudentDetails.fatherName || "N/A"}</span></p>
+                  <p>Classroom: <span className="font-semibold">Class {className}</span></p>
+                  <p>Roll No: <span className="font-mono font-semibold">{viewStudentDetails.rollNumber}</span></p>
+                  <p>Secret PIN: <span className="font-mono font-bold text-indigo-600">{viewStudentDetails.code || viewStudentDetails.secretCode}</span></p>
+                  {viewStudentDetails.mobile && (
+                    <p>Mobile: <span className="font-mono">{viewStudentDetails.mobile}</span></p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="p-3 border dark:border-neutral-800 rounded-xl text-center bg-green-50/30 dark:bg-green-950/10">
+                  <p className="text-[10px] text-neutral-500 font-medium">Logged Days</p>
+                  <p className="text-lg font-black text-green-600 dark:text-green-400">{studentLogs.length}</p>
+                </div>
+                <div className="p-3 border dark:border-neutral-800 rounded-xl text-center bg-blue-50/30 dark:bg-blue-950/10">
+                  <p className="text-[10px] text-neutral-500 font-medium">Month Checks</p>
+                  <p className="text-lg font-black text-blue-600 dark:text-blue-400">{filteredLogs.length}</p>
+                </div>
+                <div className="p-3 border dark:border-neutral-800 rounded-xl text-center bg-indigo-50/30 dark:bg-indigo-950/10">
+                  <p className="text-[10px] text-neutral-500 font-medium">Index Score</p>
+                  <p className="text-lg font-black text-indigo-600 dark:text-indigo-400">{rate}%</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-bold uppercase text-neutral-400">Date-wise Logs</h4>
+                  <input
+                    type="month"
+                    value={studentMonthFilter}
+                    onChange={e => setStudentMonthFilter(e.target.value)}
+                    className="text-xs bg-neutral-100 dark:bg-neutral-800 p-1.5 rounded-lg border outline-none font-mono"
+                  />
+                </div>
+
+                {filteredLogs.length === 0 ? (
+                  <p className="text-xs text-neutral-400 italic text-center py-4">No check-ins found for the month of {studentMonthFilter}.</p>
+                ) : (
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b dark:border-neutral-800 text-neutral-500">
+                        <th className="py-2">Date</th>
+                        <th className="py-2">Lec</th>
+                        <th className="py-2">Subject</th>
+                        <th className="py-2">Time</th>
+                        <th className="py-2 text-right">Trust Score</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredLogs.map((log, idx) => (
+                        <tr key={idx} className="border-b dark:border-neutral-850 py-2">
+                          <td className="py-2 font-mono">{log.date}</td>
+                          <td className="py-2 font-bold">L{log.lecture_number}</td>
+                          <td className="py-2">{log.subject}</td>
+                          <td className="py-2 font-mono">{log.time}</td>
+                          <td className="py-2 text-right font-mono font-bold text-green-600 dark:text-green-400">{log.trust_score || log.trust || "N/A"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </main>
   );
 }
