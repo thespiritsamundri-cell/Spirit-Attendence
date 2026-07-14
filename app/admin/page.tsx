@@ -108,6 +108,8 @@ export default function Admin() {
   const [teacherForm, setTeacherForm] = useState({ name: "", subjectId: "" });
   const [subjectForm, setSubjectForm] = useState({ name: "" });
   const [studentForm, setStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
+  const [showEditStudent, setShowEditStudent] = useState<any>(null);
+  const [editStudentForm, setEditStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
 
   // Helper: generate a 6-digit secret code
   const generateSecretCode = () => Math.floor(100000 + Math.random() * 900000).toString();
@@ -449,6 +451,45 @@ export default function Admin() {
     setAlerts(prev => [`New student "${newStudent.name}" registered with Roll No: ${finalRoll} and Secret Code: ${finalCode}`, ...prev]);
     setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
     setShowAddStudent(false);
+  };
+
+  const handleEditStudentClick = (student: any) => {
+    setShowEditStudent(student);
+    setEditStudentForm({
+      name: student.name,
+      fatherName: student.fatherName || "",
+      classId: student.classId || "",
+      rollNumber: student.rollNumber || "",
+      secretCode: student.code || student.secretCode || ""
+    });
+  };
+
+  const updateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditStudent) return;
+
+    const updatedStudent = {
+      ...showEditStudent,
+      name: editStudentForm.name,
+      fatherName: editStudentForm.fatherName,
+      classId: editStudentForm.classId,
+      rollNumber: editStudentForm.rollNumber,
+      code: editStudentForm.secretCode,
+      secretCode: editStudentForm.secretCode
+    };
+
+    try {
+      const { error } = await supabase.from("students").update(updatedStudent).eq("id", showEditStudent.id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.warn("Supabase student update failed:", err?.message);
+    }
+
+    const updated = students.map(s => (s.id === showEditStudent.id ? updatedStudent : s));
+    setStudents(updated);
+    localStorage.setItem("local_students", JSON.stringify(updated));
+    setAlerts(prev => [`Student profile for "${updatedStudent.name}" updated successfully.`, ...prev]);
+    setShowEditStudent(null);
   };
 
   const addLecture = async (e: React.FormEvent) => {
@@ -1165,6 +1206,13 @@ export default function Admin() {
                             className="text-neutral-500 hover:text-neutral-800 dark:hover:text-white"
                           >
                             <Printer size={16} />
+                          </button>
+                          <button
+                            title="Edit student profile"
+                            onClick={() => handleEditStudentClick(s)}
+                            className="text-blue-500 hover:text-blue-700"
+                          >
+                            <Edit size={16} />
                           </button>
                           <button onClick={() => deleteItem("students", s.id, setStudents, "local_students")} className="text-red-500 hover:text-red-700">
                             <Trash2 size={16} />
@@ -2088,6 +2136,56 @@ export default function Admin() {
             >
               Save Student Profile
             </button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit Student Modal */}
+      {showEditStudent && (
+        <Modal title="Edit Student Profile" onClose={() => { setShowEditStudent(null); setEditStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" }); }}>
+          <form onSubmit={updateStudent} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Full Name</label>
+              <input required type="text" value={editStudentForm.name} onChange={e => setEditStudentForm({ ...editStudentForm, name: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Father's Name</label>
+              <input required type="text" value={editStudentForm.fatherName} onChange={e => setEditStudentForm({ ...editStudentForm, fatherName: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800" />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Classroom Grade</label>
+              <select
+                required
+                value={editStudentForm.classId}
+                onChange={e => {
+                  const newClassId = e.target.value;
+                  const autoRoll = generateRollNumber(newClassId);
+                  setEditStudentForm({ ...editStudentForm, classId: newClassId, rollNumber: autoRoll });
+                }}
+                className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800"
+              >
+                <option value="">-- Select Class --</option>
+                {classes.map(c => <option key={c.id} value={c.id}>Class {c.name}-{c.section}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Roll Number</label>
+              <input required type="text" value={editStudentForm.rollNumber} onChange={e => setEditStudentForm({ ...editStudentForm, rollNumber: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400 flex items-center justify-between">
+                <span>Secret Code</span>
+                <button
+                  type="button"
+                  onClick={() => setEditStudentForm({ ...editStudentForm, secretCode: generateSecretCode() })}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 bg-blue-50 dark:bg-blue-950/30 px-2 py-0.5 rounded-lg"
+                >
+                  ↺ Regenerate
+                </button>
+              </label>
+              <input required type="text" maxLength={6} value={editStudentForm.secretCode} onChange={e => setEditStudentForm({ ...editStudentForm, secretCode: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-500 dark:border-neutral-800" />
+            </div>
+            <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Changes</button>
           </form>
         </Modal>
       )}
