@@ -38,10 +38,12 @@ import {
   Calendar,
   Layers,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Upload
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
+import * as XLSX from "xlsx";
 
 // Initialize Supabase Client
 const supabase = createClient();
@@ -105,6 +107,7 @@ export default function Admin() {
   const [viewTeacherDetails, setViewTeacherDetails] = useState<any>(null);
   const [viewStudentDetails, setViewStudentDetails] = useState<any>(null);
   const [studentMonthFilter, setStudentMonthFilter] = useState(new Date().toISOString().slice(0, 7)); // "YYYY-MM"
+  const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
 
   // Form Inputs
   const [classForm, setClassForm] = useState({ name: "", section: "" });
@@ -126,6 +129,209 @@ export default function Admin() {
     const existingInClass = students.filter((s: any) => s.classId === classId);
     const nextNum = (existingInClass.length + 1).toString().padStart(2, "0");
     return `${prefix}${nextNum}`;
+  };
+
+  // Helper: Parse raw User Agent strings to friendly format
+  const formatDeviceName = (device: string): string => {
+    if (!device) return "Unknown Device";
+    if (!device.includes("Mozilla/")) {
+      return device;
+    }
+    
+    let os = "Unknown OS";
+    let browser = "Unknown Browser";
+    
+    if (device.includes("Android")) {
+      const match = device.match(/Android\s+([0-9\.]+)/);
+      os = match ? `Android ${match[1]}` : "Android";
+    } else if (device.includes("iPhone") || device.includes("iPad") || device.includes("iPod")) {
+      const match = device.match(/OS\s+([0-9_]+)/);
+      os = match ? `iOS ${match[1].replace(/_/g, ".")}` : "iOS";
+    } else if (device.includes("Windows NT")) {
+      const match = device.match(/Windows NT\s+([0-9\.]+)/);
+      let winVer = match ? match[1] : "";
+      if (winVer === "10.0") os = "Windows 10/11";
+      else if (winVer === "6.3") os = "Windows 8.1";
+      else if (winVer === "6.2") os = "Windows 8";
+      else if (winVer === "6.1") os = "Windows 7";
+      else os = "Windows";
+    } else if (device.includes("Macintosh")) {
+      const match = device.match(/Mac OS X\s+([0-9_]+)/);
+      os = match ? `macOS ${match[1].replace(/_/g, ".")}` : "macOS";
+    } else if (device.includes("Linux")) {
+      os = "Linux";
+    }
+    
+    if (device.includes("Edg/")) {
+      const match = device.match(/Edg\/([0-9\.]+)/);
+      browser = match ? `Edge ${match[1].split('.')[0]}` : "Edge";
+    } else if (device.includes("Chrome/")) {
+      const match = device.match(/Chrome\/([0-9\.]+)/);
+      browser = match ? `Chrome ${match[1].split('.')[0]}` : "Chrome";
+    } else if (device.includes("Safari/") && !device.includes("Chrome")) {
+      const match = device.match(/Version\/([0-9\.]+)/);
+      browser = match ? `Safari ${match[1].split('.')[0]}` : "Safari";
+    } else if (device.includes("Firefox/")) {
+      const match = device.match(/Firefox\/([0-9\.]+)/);
+      browser = match ? `Firefox ${match[1].split('.')[0]}` : "Firefox";
+    } else {
+      browser = "Web Client";
+    }
+    
+    return `${os} (${browser})`;
+  };
+
+  // Helper: Download Student Excel Template
+  const downloadSampleExcel = () => {
+    const wsData = [
+      ["Name", "Father Name", "Class"],
+      ["Ayan Ali", "Muhammad Ali", "10-A"],
+      ["Zainab Fatima", "Tariq Mahmood", "10-A"],
+      ["Muhammad Hamza", "Ahmad Khan", "9-B"],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Students Template");
+    XLSX.writeFile(wb, "Student_Import_Template.xlsx");
+  };
+
+  // Helper: Handle Excel File upload and parsing
+  const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+
+        if (jsonData.length <= 1) {
+          alert("The Excel file is empty or only contains headers.");
+          return;
+        }
+
+        const headers = jsonData[0].map((h: any) => String(h).trim().toLowerCase());
+        const nameIdx = headers.indexOf("name");
+        const fatherNameIdx = headers.indexOf("father name") !== -1 ? headers.indexOf("father name") : headers.indexOf("father's name");
+        const classIdx = headers.indexOf("class") !== -1 ? headers.indexOf("class") : headers.indexOf("classroom");
+
+        if (nameIdx === -1 || fatherNameIdx === -1 || classIdx === -1) {
+          alert("Excel sheet must contain headers: 'Name', 'Father Name', and 'Class'.");
+          return;
+        }
+
+        const newStudentsToAdd: any[] = [];
+        let skippedRowsCount = 0;
+        let successCount = 0;
+        let currentStudentsList = [...students];
+
+        const getNextRollNumberForImport = (classId: string, tempNew: any[]) => {
+          if (!classId) return "";
+          const cls = classes.find((c: any) => c.id === classId);
+          if (!cls) return "";
+          const prefix = `${cls.name}-${cls.section}-`;
+          const existingCount = currentStudentsList.filter((s: any) => s.classId === classId).length +
+                                tempNew.filter((s: any) => s.classId === classId).length;
+          const nextNum = (existingCount + 1).toString().padStart(2, "0");
+          return `${prefix}${nextNum}`;
+        };
+
+        const getNextStudentIdForImport = (tempNew: any[]) => {
+          let maxNum = 0;
+          const all = [...currentStudentsList, ...tempNew];
+          all.forEach((s: any) => {
+            const match = s.id?.match(/^s(\d+)$/);
+            if (match) {
+              const num = parseInt(match[1], 10);
+              if (num > maxNum) maxNum = num;
+            }
+          });
+          return `s${maxNum + 1}`;
+        };
+
+        for (let i = 1; i < jsonData.length; i++) {
+          const row = jsonData[i];
+          if (!row || row.length === 0) continue;
+
+          const rawName = row[nameIdx];
+          const rawFatherName = row[fatherNameIdx];
+          const rawClass = row[classIdx];
+
+          if (!rawName || !rawClass) {
+            skippedRowsCount++;
+            continue;
+          }
+
+          const studentName = String(rawName).trim();
+          const fatherName = rawFatherName ? String(rawFatherName).trim() : "N/A";
+          const className = String(rawClass).trim();
+
+          const matchedClass = classes.find((c: any) => {
+            const fullClassStr1 = `${c.name}-${c.section}`.toLowerCase();
+            const fullClassStr2 = `${c.name} ${c.section}`.toLowerCase();
+            const searchClass = className.replace(/\s+/g, '').toLowerCase();
+            return fullClassStr1 === searchClass || 
+                   fullClassStr1.replace('-', '') === searchClass ||
+                   fullClassStr2 === searchClass ||
+                   c.name.toLowerCase() === className.toLowerCase();
+          });
+
+          if (!matchedClass) {
+            skippedRowsCount++;
+            continue;
+          }
+
+          const classId = matchedClass.id;
+          const finalRoll = getNextRollNumberForImport(classId, newStudentsToAdd);
+          const finalCode = generateSecretCode();
+          const nextId = getNextStudentIdForImport(newStudentsToAdd);
+
+          const newStudent = {
+            id: nextId,
+            name: studentName,
+            fatherName: fatherName,
+            classId: classId,
+            rollNumber: finalRoll,
+            code: finalCode,
+            secretCode: finalCode,
+            attendance: "100%"
+          };
+
+          newStudentsToAdd.push(newStudent);
+          successCount++;
+        }
+
+        if (newStudentsToAdd.length === 0) {
+          alert(`No students were imported. (Skipped/Invalid rows: ${skippedRowsCount})`);
+          return;
+        }
+
+        try {
+          const { error } = await supabase.from("students").insert(newStudentsToAdd);
+          if (error) throw error;
+        } catch (supabaseErr) {
+          console.warn("Supabase batch insert failed, using local storage fallback:", supabaseErr);
+        }
+
+        const updatedStudents = [...students, ...newStudentsToAdd];
+        setStudents(updatedStudents);
+        localStorage.setItem("local_students", JSON.stringify(updatedStudents));
+
+        const alertMsg = `Successfully imported ${successCount} students via Excel! ${skippedRowsCount > 0 ? `(Skipped ${skippedRowsCount} rows due to empty values or unmatched classes)` : ''}`;
+        setAlerts(prev => [alertMsg, ...prev]);
+        alert(alertMsg);
+
+        e.target.value = "";
+      } catch (err) {
+        console.error("Error reading Excel file:", err);
+        alert("Failed to parse the Excel file. Please ensure it is a valid format.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   // Helper: Format 24-hour time string (HH:MM) to 12-hour AM/PM string
@@ -1202,6 +1408,21 @@ export default function Admin() {
                 >
                   <Printer size={14} /> Print Names Roster
                 </button>
+                <button
+                  onClick={downloadSampleExcel}
+                  className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-4 py-2 text-xs font-semibold flex gap-1.5 items-center shadow-sm"
+                >
+                  <Download size={14} /> Excel Template
+                </button>
+                <label className="bg-green-600 hover:bg-green-700 text-white rounded-xl px-4 py-2 text-xs font-semibold flex gap-1.5 items-center shadow-sm cursor-pointer">
+                  <Upload size={14} /> Import Excel
+                  <input
+                    type="file"
+                    accept=".xlsx, .xls"
+                    className="hidden"
+                    onChange={handleImportExcel}
+                  />
+                </label>
                 <button onClick={() => setShowAddStudent(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-xs font-semibold flex gap-1 items-center">
                   <Plus size={14} /> Add Student
                 </button>
@@ -1412,7 +1633,7 @@ export default function Admin() {
                       <td className="py-3 px-4 font-bold">{r.studentName || r.student_name}</td>
                       <td className="py-3 px-4">{r.class || r.class_name}</td>
                       <td className="py-3 px-4">{r.lecture || r.subject || `Lecture ${r.lecture_number}`}</td>
-                      <td className="py-3 px-4 text-neutral-500">{r.device || r.device_model}</td>
+                      <td className="py-3 px-4 text-neutral-500 max-w-[220px] truncate" title={r.device || r.device_model}>{formatDeviceName(r.device || r.device_model)}</td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-200">
                           {r.status || "Present"}
@@ -1501,11 +1722,12 @@ export default function Admin() {
                             </div>
 
                             {log.photo ? (
-                              <div className="relative group rounded-xl overflow-hidden border dark:border-neutral-800 mb-3 bg-neutral-100 dark:bg-neutral-900 h-44 w-full">
+                              <div className="relative group rounded-xl overflow-hidden border dark:border-neutral-800 mb-3 bg-neutral-955 dark:bg-neutral-950 h-44 w-full">
                                 <img
                                   src={log.photo}
                                   alt={`${studentName} verification frame`}
-                                  className="h-full w-full object-cover"
+                                  className="h-full w-full object-contain cursor-zoom-in hover:scale-[1.02] transition-transform duration-200"
+                                  onClick={() => setSelectedZoomPhoto(log.photo)}
                                 />
                                 <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded flex items-center gap-1.5">
                                   {log.isVerified === true && <span className="text-green-400">Approved ✔</span>}
@@ -1520,8 +1742,8 @@ export default function Admin() {
                               </div>
                             )}
 
-                            <p className="text-xs text-neutral-500">
-                              Device: <span className="font-semibold text-neutral-700 dark:text-white">{log.device || log.device_model || "Mobile Web"}</span>
+                            <p className="text-xs text-neutral-500" title={log.device || log.device_model || "Mobile Web"}>
+                              Device: <span className="font-semibold text-neutral-700 dark:text-white">{formatDeviceName(log.device || log.device_model || "Mobile Web")}</span>
                             </p>
                           </div>
 
@@ -1793,7 +2015,7 @@ export default function Admin() {
                       <td className="py-3 px-4 font-bold">{r.studentName || r.student_name}</td>
                       <td className="py-3 px-4">{r.class || r.class_name}</td>
                       <td className="py-3 px-4">{r.lecture || r.subject || `Lecture ${r.lecture_number}`}</td>
-                      <td className="py-3 px-4 text-neutral-500">{r.device || r.device_model}</td>
+                      <td className="py-3 px-4 text-neutral-500 max-w-[220px] truncate" title={r.device || r.device_model}>{formatDeviceName(r.device || r.device_model)}</td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                           r.status === "Present" ? "bg-green-100 text-green-800 dark:bg-green-950" : "bg-red-100 text-red-800 dark:bg-red-950"
@@ -2464,6 +2686,29 @@ export default function Admin() {
           </Modal>
         );
       })()}
+
+      {/* Lightbox Photo Zoom Modal */}
+      {selectedZoomPhoto && (
+        <div 
+          className="fixed inset-0 z-[100] grid place-items-center bg-black/85 backdrop-blur-sm p-4 animate-in fade-in duration-200" 
+          onClick={() => setSelectedZoomPhoto(null)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] w-full h-full flex flex-col justify-center items-center">
+            <img
+              src={selectedZoomPhoto}
+              alt="Zoomed Student Verification Frame"
+              className="max-w-full max-h-[80vh] rounded-2xl object-contain shadow-2xl border border-white/10"
+            />
+            <button
+              onClick={() => setSelectedZoomPhoto(null)}
+              className="absolute top-4 right-4 text-white bg-black/40 hover:bg-black/75 p-2.5 rounded-full transition-colors"
+            >
+              <X size={20} />
+            </button>
+            <p className="text-white/60 text-xs mt-3 select-none">Click anywhere to close zoom overlay</p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
