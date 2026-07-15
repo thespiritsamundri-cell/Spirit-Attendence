@@ -39,6 +39,7 @@ export default function Today() {
   // PWA states
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState<boolean>(false);
+  const [isInstalled, setIsInstalled] = useState<boolean>(false);
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
@@ -120,8 +121,13 @@ export default function Today() {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     console.log(`User response to install: ${outcome}`);
+    if (outcome === 'accepted') {
+      setIsInstalled(true);
+      setIsInstallable(false);
+    } else {
+      alert("⚠️ App installation is required to mark attendance. Please click install and accept the prompt to continue.");
+    }
     setDeferredPrompt(null);
-    setIsInstallable(false);
   };
 
   const toggleTheme = () => {
@@ -485,37 +491,51 @@ export default function Today() {
           </div>
 
           {/* STEP 1: ONE-TIME SECURITY CONSENT */}
-          {currentStep === 1 && (
-            <div className="space-y-4 animate-in fade-in duration-300">
-              <p className="text-sm text-neutral-600 dark:text-white/70 leading-relaxed">
-                To verify your active session attendance, this device must grant one-time permissions to fetch GPS coordinates and perform a background camera validation.
-              </p>
-              
-              {isInstallable && (
-                <button
-                  type="button"
-                  onClick={handleInstallClick}
-                  className="w-full rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 shadow-md transition-all text-sm flex items-center justify-center gap-2 border border-amber-500/30 hover:scale-[1.01]"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                  Install TSS Attendance App
-                </button>
-              )}
-
-              <button
-                onClick={requestPermissions}
-                disabled={busy}
-                className="w-full rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 shadow-soft transition-colors text-base disabled:opacity-50"
-              >
-                {busy ? "Authorizing prompts..." : "Authorize Security Checklist"}
-              </button>
-              {permissionError && (
-                <p className="text-xs text-red-600 font-medium bg-red-50 dark:bg-red-950/20 p-2.5 rounded-lg border border-red-100 dark:border-red-900/40">
-                  {permissionError}
+          {currentStep === 1 && (() => {
+            const isProceedBlocked = isInstallable && !isInstalled;
+            return (
+              <div className="space-y-4 animate-in fade-in duration-300">
+                <p className="text-sm text-neutral-600 dark:text-white/70 leading-relaxed">
+                  To verify your active session attendance, this device must grant one-time permissions to fetch GPS coordinates and perform a background camera validation.
                 </p>
-              )}
-            </div>
-          )}
+                
+                {isInstallable && (
+                  <button
+                    type="button"
+                    onClick={handleInstallClick}
+                    className="w-full rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 shadow-md transition-all text-sm flex items-center justify-center gap-2 border border-amber-500/30 hover:scale-[1.01]"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    Install TSS Attendance App
+                  </button>
+                )}
+
+                <button
+                  onClick={requestPermissions}
+                  disabled={busy || isProceedBlocked}
+                  className={`w-full rounded-2xl font-bold py-4 transition-colors text-base shadow-soft ${
+                    isProceedBlocked
+                      ? "bg-neutral-200 dark:bg-neutral-800 text-neutral-400 dark:text-neutral-600 cursor-not-allowed border dark:border-neutral-850"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  }`}
+                >
+                  {busy ? "Authorizing prompts..." : "Authorize Security Checklist"}
+                </button>
+
+                {isProceedBlocked && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400/90 font-medium text-center bg-amber-50 dark:bg-amber-950/20 p-2.5 rounded-xl border border-amber-100 dark:border-amber-900/40 animate-pulse">
+                    ⚠️ App installation is compulsory. Please install the TSS Attendance App using the button above to unlock the authorization button.
+                  </p>
+                )}
+
+                {permissionError && (
+                  <p className="text-xs text-red-600 font-medium bg-red-50 dark:bg-red-950/20 p-2.5 rounded-lg border border-red-100 dark:border-red-900/40">
+                    {permissionError}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* STEP 2: SECRET CODE LOGIN */}
           {currentStep === 2 && (
