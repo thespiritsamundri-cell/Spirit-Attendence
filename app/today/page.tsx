@@ -41,6 +41,8 @@ export default function Today() {
   const [isInstallable, setIsInstallable] = useState<boolean>(false);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
 
+  const [showCelebration, setShowCelebration] = useState<boolean>(false);
+
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
@@ -220,15 +222,9 @@ export default function Today() {
       if (raw) localStudents = JSON.parse(raw);
     } catch {}
 
-    // Hardcoded admin fallback (always present as safety net, both fields set)
-    const adminFallback = [
-      { id: "s1", name: "Ayan Ali", fatherName: "Muhammad Ali", classId: "c1", rollNumber: "10-A-01", code: "482917", secretCode: "482917" },
-      { id: "s2", name: "Zainab Fatima", fatherName: "Tariq Mahmood", classId: "c1", rollNumber: "10-A-02", code: "104928", secretCode: "104928" }
-    ];
-
-    // Merge: adminFallback → demoStudents → localStudents (last wins for same id)
+    // Merge: localStudents only (demo values are removed, ensuring deletions are permanent)
     const pool = new Map<string, any>();
-    [...adminFallback, ...demoStudents, ...localStudents].forEach(s => {
+    [...localStudents].forEach(s => {
       if (s?.id) pool.set(s.id, s);
     });
 
@@ -421,6 +417,7 @@ export default function Today() {
       const currentLogs = currentLogsRaw ? JSON.parse(currentLogsRaw) : [];
       localStorage.setItem("local_attendance_logs", JSON.stringify([attendanceRecord, ...currentLogs]));
 
+      setShowCelebration(true);
       setMsg(`🎉 Congratulations! Attendance successfully logged for Lecture ${activeLecture.number}. Safety Trust Index: ${score}%. Redirecting to Google Meet in 5 seconds...`);
 
       setTimeout(() => {
@@ -789,6 +786,132 @@ export default function Today() {
       <footer className="w-full text-center text-xs text-neutral-450 dark:text-neutral-500 font-mono py-6 mt-8">
         Developed by Mian Mudassar
       </footer>
+
+      {showCelebration && (
+        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden select-none">
+          {/* Confetti particles */}
+          {Array.from({ length: 80 }).map((_, i) => {
+            const left = Math.random() * 100;
+            const delay = Math.random() * 3;
+            const duration = 2 + Math.random() * 3;
+            const color = ['#FFC0CB', '#FFD700', '#FF4500', '#ADFF2F', '#00FFFF', '#FF00FF', '#4169E1', '#32CD32'][Math.floor(Math.random() * 8)];
+            const size = 6 + Math.random() * 8;
+            const rotation = Math.random() * 360;
+            return (
+              <div
+                key={`c-${i}`}
+                className="absolute"
+                style={{
+                  left: `${left}%`,
+                  top: `-20px`,
+                  width: `${size}px`,
+                  height: `${size}px`,
+                  backgroundColor: color,
+                  borderRadius: Math.random() > 0.5 ? '50%' : '0%',
+                  transform: `rotate(${rotation}deg)`,
+                  animation: `fall ${duration}s linear ${delay}s infinite`,
+                }}
+              />
+            );
+          })}
+          
+          {/* Balloons */}
+          {Array.from({ length: 15 }).map((_, i) => {
+            const left = 5 + Math.random() * 90;
+            const delay = Math.random() * 2;
+            const duration = 4 + Math.random() * 4;
+            const color = ['rgba(239, 68, 68, 0.85)', 'rgba(59, 130, 246, 0.85)', 'rgba(16, 185, 129, 0.85)', 'rgba(245, 158, 11, 0.85)', 'rgba(139, 92, 246, 0.85)', 'rgba(236, 72, 153, 0.85)'][Math.floor(Math.random() * 6)];
+            const width = 45 + Math.random() * 25;
+            const height = width * 1.25;
+            return (
+              <div
+                key={`b-${i}`}
+                className="absolute bottom-[-150px] flex flex-col items-center"
+                style={{
+                  left: `${left}%`,
+                  animation: `floatUp ${duration}s ease-in-out ${delay}s infinite`,
+                }}
+              >
+                {/* Balloon Body */}
+                <div
+                  style={{
+                    width: `${width}px`,
+                    height: `${height}px`,
+                    backgroundColor: color,
+                    borderRadius: '50% 50% 50% 50% / 40% 40% 60% 60%',
+                    position: 'relative',
+                    boxShadow: 'inset -6px -8px 0 rgba(0,0,0,0.15), 0 8px 15px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  {/* Highlight sheen */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '15%',
+                      left: '15%',
+                      width: '25%',
+                      height: '25%',
+                      backgroundColor: 'rgba(255,255,255,0.4)',
+                      borderRadius: '50%'
+                    }}
+                  />
+                  {/* Knot */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '-5px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: '0',
+                      height: '0',
+                      borderLeft: '5px solid transparent',
+                      borderRight: '5px solid transparent',
+                      borderBottom: `6px solid ${color}`
+                    }}
+                  />
+                </div>
+                {/* String */}
+                <div
+                  style={{
+                    width: '1.5px',
+                    height: '80px',
+                    backgroundColor: '#aaa',
+                    opacity: 0.6,
+                    transform: 'skewX(5deg)',
+                    transformOrigin: 'top center'
+                  }}
+                />
+              </div>
+            );
+          })}
+          
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              @keyframes fall {
+                0% {
+                  transform: translateY(0) rotate(0deg);
+                  opacity: 1;
+                }
+                100% {
+                  transform: translateY(105vh) rotate(720deg);
+                  opacity: 0.3;
+                }
+              }
+              @keyframes floatUp {
+                0% {
+                  transform: translateY(0) rotate(0deg);
+                }
+                50% {
+                  transform: translateY(-60vh) rotate(5deg);
+                }
+                100% {
+                  transform: translateY(-130vh) rotate(-5deg);
+                }
+              }
+            `
+          }} />
+        </div>
+      )}
     </main>
   );
 }

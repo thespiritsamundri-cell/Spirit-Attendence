@@ -143,6 +143,16 @@ export default function Admin() {
   const [showEditStudent, setShowEditStudent] = useState<any>(null);
   const [editStudentForm, setEditStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
 
+  const [showEditTeacher, setShowEditTeacher] = useState<any>(null);
+  const [editTeacherForm, setEditTeacherForm] = useState({ name: "", subjectId: "" });
+  const [showEditSubject, setShowEditSubject] = useState<any>(null);
+  const [editSubjectForm, setEditSubjectForm] = useState({ name: "" });
+
+  // Admin Credential Change States
+  const [credentialForm, setCredentialForm] = useState({ currentPassword: "", newUsername: "", newPassword: "", confirmPassword: "" });
+  const [credentialMsg, setCredentialMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [credentialBusy, setCredentialBusy] = useState(false);
+
   // Helper: generate a 6-digit secret code
   const generateSecretCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -422,11 +432,29 @@ export default function Admin() {
       window.location.href = "/admin/login";
     } else {
       setIsAuthenticated(true);
+      // Restore active tab from URL param
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam) {
+        // Convert slug back to display name
+        const allItems = moduleCategories.flatMap(c => c.items);
+        const matched = allItems.find(item => item.toLowerCase().replace(/[^a-z0-9]+/g, "-") === tabParam || item.toLowerCase() === tabParam.replace(/-/g, " "));
+        if (matched) setActiveTab(matched);
+      }
     }
 
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
   }, []);
+
+  // Helper: change tab AND sync URL
+  const navigateTab = (tab: string) => {
+    setActiveTab(tab);
+    const slug = tab.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", slug);
+    window.history.pushState({}, "", url.toString());
+  };
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -447,9 +475,9 @@ export default function Admin() {
       // Classes
       try {
         const { data, error } = await supabase.from("classes").select("*");
-        if (error || !data || data.length === 0) throw error || new Error("empty");
-        setClasses(data);
-        localStorage.setItem("local_classes", JSON.stringify(data));
+        if (error) throw error;
+        setClasses(data || []);
+        localStorage.setItem("local_classes", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_classes");
         const fallback = local ? JSON.parse(local) : [
@@ -463,9 +491,9 @@ export default function Admin() {
       // Subjects
       try {
         const { data, error } = await supabase.from("subjects").select("*");
-        if (error || !data || data.length === 0) throw error || new Error("empty");
-        setSubjects(data);
-        localStorage.setItem("local_subjects", JSON.stringify(data));
+        if (error) throw error;
+        setSubjects(data || []);
+        localStorage.setItem("local_subjects", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_subjects");
         const fallback = local ? JSON.parse(local) : [
@@ -481,9 +509,9 @@ export default function Admin() {
       // Teachers
       try {
         const { data, error } = await supabase.from("teachers").select("*");
-        if (error || !data || data.length === 0) throw error || new Error("empty");
-        setTeachers(data);
-        localStorage.setItem("local_teachers", JSON.stringify(data));
+        if (error) throw error;
+        setTeachers(data || []);
+        localStorage.setItem("local_teachers", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_teachers");
         const fallback = local ? JSON.parse(local) : [
@@ -497,9 +525,9 @@ export default function Admin() {
       // Students
       try {
         const { data, error } = await supabase.from("students").select("*");
-        if (error || !data || data.length === 0) throw error || new Error("empty");
-        setStudents(data);
-        localStorage.setItem("local_students", JSON.stringify(data));
+        if (error) throw error;
+        setStudents(data || []);
+        localStorage.setItem("local_students", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_students");
         const fallback = local ? JSON.parse(local) : [
@@ -513,9 +541,9 @@ export default function Admin() {
       // Lecture Schedules
       try {
         const { data, error } = await supabase.from("lectures").select("*");
-        if (error || !data || data.length === 0) throw error || new Error("empty");
-        setLectures(data);
-        localStorage.setItem("local_lectures", JSON.stringify(data));
+        if (error) throw error;
+        setLectures(data || []);
+        localStorage.setItem("local_lectures", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_lectures");
         const fallback = local ? JSON.parse(local) : [
@@ -667,6 +695,126 @@ export default function Admin() {
     localStorage.setItem("local_teachers", JSON.stringify(updated));
     setTeacherForm({ name: "", subjectId: "" });
     setShowAddTeacher(false);
+  };
+
+  const handleEditSubjectClick = (subject: any) => {
+    setShowEditSubject(subject);
+    setEditSubjectForm({ name: subject.name });
+  };
+
+  const updateSubject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditSubject) return;
+
+    const updatedSubject = {
+      ...showEditSubject,
+      name: editSubjectForm.name
+    };
+
+    try {
+      const { error } = await supabase.from("subjects").update(updatedSubject).eq("id", showEditSubject.id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.warn("Supabase subject update failed:", err?.message);
+    }
+
+    const updated = subjects.map(s => (s.id === showEditSubject.id ? updatedSubject : s));
+    setSubjects(updated);
+    localStorage.setItem("local_subjects", JSON.stringify(updated));
+    setAlerts(prev => [`Subject details updated successfully.`, ...prev]);
+    setShowEditSubject(null);
+  };
+
+  const handleEditTeacherClick = (teacher: any) => {
+    setShowEditTeacher(teacher);
+    setEditTeacherForm({
+      name: teacher.name,
+      subjectId: teacher.subjectId || ""
+    });
+  };
+
+  const updateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showEditTeacher) return;
+
+    const updatedTeacher = {
+      ...showEditTeacher,
+      name: editTeacherForm.name,
+      subjectId: editTeacherForm.subjectId
+    };
+
+    try {
+      const { error } = await supabase.from("teachers").update(updatedTeacher).eq("id", showEditTeacher.id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.warn("Supabase teacher update failed:", err?.message);
+    }
+
+    const updated = teachers.map(t => (t.id === showEditTeacher.id ? updatedTeacher : t));
+    setTeachers(updated);
+    localStorage.setItem("local_teachers", JSON.stringify(updated));
+    setAlerts(prev => [`Teacher details updated successfully.`, ...prev]);
+    setShowEditTeacher(null);
+  };
+
+  const updateAdminCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCredentialMsg(null);
+    setCredentialBusy(true);
+
+    const { currentPassword, newUsername, newPassword, confirmPassword } = credentialForm;
+
+    if (newPassword && newPassword !== confirmPassword) {
+      setCredentialMsg({ type: "error", text: "New passwords do not match." });
+      setCredentialBusy(false);
+      return;
+    }
+    if (!newUsername && !newPassword) {
+      setCredentialMsg({ type: "error", text: "Please enter at least a new username or a new password." });
+      setCredentialBusy(false);
+      return;
+    }
+
+    try {
+      // Verify current password first
+      const { data: currentCred, error: verifyError } = await supabase
+        .from("admin_credentials")
+        .select("*")
+        .eq("password", currentPassword.trim())
+        .maybeSingle();
+
+      if (verifyError) throw new Error(verifyError.message);
+      if (!currentCred) {
+        setCredentialMsg({ type: "error", text: "Current password is incorrect. Please try again." });
+        setCredentialBusy(false);
+        return;
+      }
+
+      // Build update payload
+      const updatePayload: any = {};
+      if (newUsername) updatePayload.username = newUsername.trim();
+      if (newPassword) updatePayload.password = newPassword.trim();
+
+      const { error: updateError } = await supabase
+        .from("admin_credentials")
+        .update(updatePayload)
+        .eq("username", currentCred.username);
+
+      if (updateError) throw new Error(updateError.message);
+
+      setCredentialMsg({ type: "success", text: `Credentials updated successfully! ${newUsername ? `New username: "${newUsername}".` : ""} Please log in again.` });
+      setCredentialForm({ currentPassword: "", newUsername: "", newPassword: "", confirmPassword: "" });
+
+      // Force re-login after 3 seconds
+      setTimeout(() => {
+        sessionStorage.removeItem("adminSession");
+        window.location.href = "/admin/login";
+      }, 3000);
+    } catch (err: any) {
+      setCredentialMsg({ type: "error", text: err.message || "Failed to update credentials." });
+    } finally {
+      setCredentialBusy(false);
+    }
   };
 
   const addStudent = async (e: React.FormEvent) => {
@@ -1061,7 +1209,7 @@ export default function Admin() {
                       return (
                         <button
                           key={m}
-                          onClick={() => setActiveTab(m)}
+                          onClick={() => navigateTab(m)}
                           title={isSidebarCollapsed ? m : undefined}
                           className={`w-full flex items-center gap-3 rounded-xl transition-colors ${
                             isSidebarCollapsed ? "justify-center p-2.5" : "px-3 py-1.5 text-sm"
@@ -1120,12 +1268,12 @@ export default function Admin() {
         {activeTab === "Dashboard" && (
           <>
             <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-4">
-              <StatsCard label="Total Students" value={students.length} icon={Users} onClick={() => setActiveTab("Students")} />
-              <StatsCard label="Registered Classes" value={classes.length} icon={School} onClick={() => setActiveTab("Classes")} />
-              <StatsCard label="Total Teachers" value={teachers.length} icon={Users} onClick={() => setActiveTab("Teachers")} />
-              <StatsCard label="Pending Devices" value={devices.length} icon={Smartphone} onClick={() => setActiveTab("Device Approvals")} />
-              <StatsCard label="Active Lecture Schedule" value={lectures.length} icon={Clock} onClick={() => setActiveTab("Lecture Schedule")} />
-              <StatsCard label="Photo Verifications Review" value={Object.keys(studentPhotoGroups).length} icon={Camera} onClick={() => setActiveTab("Photo Verification")} />
+              <StatsCard label="Total Students" value={students.length} icon={Users} onClick={() => navigateTab("Students")} />
+              <StatsCard label="Registered Classes" value={classes.length} icon={School} onClick={() => navigateTab("Classes")} />
+              <StatsCard label="Total Teachers" value={teachers.length} icon={Users} onClick={() => navigateTab("Teachers")} />
+              <StatsCard label="Pending Devices" value={devices.length} icon={Smartphone} onClick={() => navigateTab("Device Approvals")} />
+              <StatsCard label="Active Lecture Schedule" value={lectures.length} icon={Clock} onClick={() => navigateTab("Lecture Schedule")} />
+              <StatsCard label="Photo Verifications Review" value={Object.keys(studentPhotoGroups).length} icon={Camera} onClick={() => navigateTab("Photo Verification")} />
             </div>
 
             <div className="mt-6 grid xl:grid-cols-2 gap-4">
@@ -1403,7 +1551,14 @@ export default function Admin() {
                     <tr key={s.id} className="border-b dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                       <td className="py-3 px-4 font-mono font-bold text-blue-600">{s.id}</td>
                       <td className="py-3 px-4">{s.name}</td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3 px-4 text-right flex justify-end gap-3 items-center">
+                        <button
+                          onClick={() => handleEditSubjectClick(s)}
+                          className="text-blue-500 hover:text-blue-750 p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                          title="Edit subject"
+                        >
+                          <Edit size={15} />
+                        </button>
                         <button onClick={() => deleteItem("subjects", s.id, setSubjects, "local_subjects")} className="text-red-500 hover:text-red-700">
                           <Trash2 size={16} />
                         </button>
@@ -1451,6 +1606,13 @@ export default function Admin() {
                             className="bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 p-1.5 rounded-lg hover:scale-105 transition-transform"
                           >
                             <BarChart3 size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleEditTeacherClick(t)}
+                            className="text-blue-500 hover:text-blue-750 p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition-colors"
+                            title="Edit teacher"
+                          >
+                            <Edit size={15} />
                           </button>
                           <button onClick={() => deleteItem("teachers", t.id, setTeachers, "local_teachers")} className="text-red-500 hover:text-red-700">
                             <Trash2 size={16} />
@@ -1970,47 +2132,8 @@ export default function Admin() {
           </div>
         )}
 
-        {/* System Settings Tab */}
-        {activeTab === "System Settings" && (
-          <div className="max-w-2xl rounded-3xl border bg-white p-6 shadow-sm dark:bg-neutral-900 dark:border-white/10">
-            <h3 className="font-bold text-lg mb-4">Portal Branding Configuration</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-semibold">School Name Banner</label>
-                <input
-                  type="text"
-                  value={schoolInfo.name}
-                  onChange={e => setSchoolInfo({ ...schoolInfo, name: e.target.value })}
-                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 outline-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold">Verification Alert Messages</label>
-                <textarea
-                  rows={3}
-                  value={schoolInfo.welcomeMessage}
-                  onChange={e => setSchoolInfo({ ...schoolInfo, welcomeMessage: e.target.value })}
-                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 outline-blue-500"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-semibold">Color Hex Accent</label>
-                <input
-                  type="text"
-                  value={schoolInfo.themeColor}
-                  onChange={e => setSchoolInfo({ ...schoolInfo, themeColor: e.target.value })}
-                  className="w-full mt-1.5 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 font-mono text-sm outline-blue-500"
-                />
-              </div>
-              <button onClick={() => {
-                localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
-                alert("Branding saved!");
-              }} className="w-full rounded-xl bg-blue-600 text-white font-bold py-3 flex gap-2 justify-center items-center hover:bg-blue-700">
-                <Save size={18} /> Update Portal Config
-              </button>
-            </div>
-          </div>
-        )}
+
+
 
         {/* Attendance Reports Tab */}
         {activeTab === "Attendance Reports" && (
@@ -2307,6 +2430,233 @@ export default function Admin() {
             </div>
           </div>
         )}
+{/* System Settings Tab */}
+      {activeTab === "System Settings" && (
+        <div className="animate-in fade-in duration-300 space-y-6">
+
+          {/* Page Header */}
+          <div className="p-5 rounded-3xl bg-gradient-to-br from-slate-800 to-blue-900 text-white shadow-xl relative overflow-hidden">
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 50%, #60a5fa 0%, transparent 60%)' }} />
+            <div className="relative flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-white/15 border border-white/20 grid place-items-center shadow-lg shrink-0">
+                <Lock size={22} className="text-blue-300" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black tracking-tight">System Settings</h2>
+                <p className="text-blue-200 text-xs mt-0.5">Manage portal branding and admin security credentials</p>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Card 1: Portal Branding ── */}
+          <div className="rounded-3xl border bg-white dark:bg-neutral-900 dark:border-white/10 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b dark:border-neutral-800 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white grid place-items-center shadow shrink-0">
+                <School size={16} />
+              </div>
+              <div>
+                <h3 className="font-extrabold">Portal Branding</h3>
+                <p className="text-xs text-neutral-400">Customise the check-in portal appearance</p>
+              </div>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">School Name Banner</label>
+                <input
+                  type="text"
+                  value={schoolInfo.name}
+                  onChange={e => setSchoolInfo({ ...schoolInfo, name: e.target.value })}
+                  className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 outline-blue-500 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">Verification Alert Messages</label>
+                <textarea
+                  rows={3}
+                  value={schoolInfo.welcomeMessage}
+                  onChange={e => setSchoolInfo({ ...schoolInfo, welcomeMessage: e.target.value })}
+                  className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 outline-blue-500 text-sm resize-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">Color Hex Accent</label>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="color"
+                    value={schoolInfo.themeColor}
+                    onChange={e => setSchoolInfo({ ...schoolInfo, themeColor: e.target.value })}
+                    className="h-10 w-14 rounded-lg border dark:border-neutral-700 cursor-pointer bg-transparent"
+                  />
+                  <input
+                    type="text"
+                    value={schoolInfo.themeColor}
+                    onChange={e => setSchoolInfo({ ...schoolInfo, themeColor: e.target.value })}
+                    className="flex-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 p-3 font-mono text-sm outline-blue-500"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
+                  alert("Branding saved!");
+                }}
+                className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 flex gap-2 justify-center items-center transition-colors shadow-md text-sm"
+              >
+                <Save size={16} /> Save Portal Branding
+              </button>
+            </div>
+          </div>
+
+          {/* ── Card 2: Change Credentials ── */}
+          <div className="rounded-3xl border bg-white dark:bg-neutral-900 dark:border-white/10 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b dark:border-neutral-800 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-xl bg-blue-600 text-white grid place-items-center shadow shrink-0">
+                <Lock size={16} />
+              </div>
+              <div>
+                <h3 className="font-extrabold">Change Admin Credentials</h3>
+                <p className="text-xs text-neutral-400">Requires current password to verify your identity</p>
+              </div>
+            </div>
+
+            <form onSubmit={updateAdminCredentials} className="p-6 space-y-4">
+              {/* Current Password */}
+              <div>
+                <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">Current Password <span className="text-red-500 normal-case font-normal">(required to save)</span></label>
+                <div className="relative">
+                  <ShieldAlert size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                  <input
+                    type="password"
+                    required
+                    disabled={credentialBusy}
+                    value={credentialForm.currentPassword}
+                    onChange={e => setCredentialForm({ ...credentialForm, currentPassword: e.target.value })}
+                    placeholder="Enter your current password"
+                    className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 pl-10 pr-4 py-3 outline-blue-500 font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* New Username + New Password */}
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">New Username <span className="normal-case font-normal text-neutral-400">(optional)</span></label>
+                  <div className="relative">
+                    <Users size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      type="text"
+                      disabled={credentialBusy}
+                      value={credentialForm.newUsername}
+                      onChange={e => setCredentialForm({ ...credentialForm, newUsername: e.target.value })}
+                      placeholder="Leave blank to keep"
+                      className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 pl-10 pr-4 py-3 outline-blue-500 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">New Password <span className="normal-case font-normal text-neutral-400">(optional)</span></label>
+                  <div className="relative">
+                    <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      type="password"
+                      disabled={credentialBusy}
+                      value={credentialForm.newPassword}
+                      onChange={e => setCredentialForm({ ...credentialForm, newPassword: e.target.value })}
+                      placeholder="Leave blank to keep"
+                      className="w-full rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 pl-10 pr-4 py-3 outline-blue-500 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              {credentialForm.newPassword && (
+                <div>
+                  <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2 block">Confirm New Password</label>
+                  <div className="relative">
+                    <ShieldCheck size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      type="password"
+                      disabled={credentialBusy}
+                      value={credentialForm.confirmPassword}
+                      onChange={e => setCredentialForm({ ...credentialForm, confirmPassword: e.target.value })}
+                      placeholder="Re-enter new password"
+                      className={`w-full rounded-xl border pl-10 pr-4 py-3 outline-blue-500 font-mono text-sm transition-colors ${
+                        credentialForm.confirmPassword && credentialForm.confirmPassword !== credentialForm.newPassword
+                          ? "border-red-400 bg-red-50 dark:bg-red-950/20"
+                          : credentialForm.confirmPassword === credentialForm.newPassword && credentialForm.confirmPassword
+                            ? "border-green-400 bg-green-50 dark:bg-green-950/20"
+                            : "bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800"
+                      }`}
+                    />
+                  </div>
+                  {credentialForm.confirmPassword && credentialForm.confirmPassword !== credentialForm.newPassword && (
+                    <p className="text-xs text-red-500 mt-1.5">⚠ Passwords do not match</p>
+                  )}
+                  {credentialForm.confirmPassword && credentialForm.confirmPassword === credentialForm.newPassword && (
+                    <p className="text-xs text-green-600 mt-1.5">✓ Passwords match</p>
+                  )}
+                </div>
+              )}
+
+              {/* Status Message */}
+              {credentialMsg && (
+                <div className={`flex items-start gap-3 p-4 rounded-2xl text-sm border ${
+                  credentialMsg.type === "success"
+                    ? "bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900 text-green-700 dark:text-green-400"
+                    : "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900 text-red-600 dark:text-red-400"
+                }`}>
+                  {credentialMsg.type === "success" ? <CheckCircle2 size={18} className="shrink-0 mt-0.5" /> : <ShieldAlert size={18} className="shrink-0 mt-0.5" />}
+                  <div>
+                    <p className="font-semibold">{credentialMsg.type === "success" ? "Credentials Updated!" : "Update Failed"}</p>
+                    <p className="text-xs mt-0.5 opacity-80">{credentialMsg.text}</p>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={credentialBusy || (!!credentialForm.newPassword && credentialForm.newPassword !== credentialForm.confirmPassword)}
+                className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 shadow-lg transition-all disabled:opacity-40 flex items-center justify-center gap-2 text-sm"
+              >
+                <Save size={16} />
+                {credentialBusy ? "Saving Changes..." : "Save Credential Changes"}
+              </button>
+              <p className="text-center text-[11px] text-neutral-400">After saving, you will be signed out and redirected to the login page.</p>
+            </form>
+          </div>
+
+          {/* ── Card 3: Session Management ── */}
+          <div className="rounded-3xl border border-red-200 dark:border-red-900/40 bg-white dark:bg-neutral-900 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-red-100 dark:border-red-900/40 flex items-center gap-3 bg-red-50/50 dark:bg-red-950/10">
+              <div className="h-9 w-9 rounded-xl bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 grid place-items-center shrink-0">
+                <LogOut size={16} />
+              </div>
+              <div>
+                <h3 className="font-extrabold">Session Management</h3>
+                <p className="text-xs text-neutral-400">End your current admin session</p>
+              </div>
+            </div>
+            <div className="p-6 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold">Sign Out of Admin Panel</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Your session will be cleared immediately. Log in again to regain access.</p>
+              </div>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem("adminSession");
+                  window.location.href = "/admin/login";
+                }}
+                className="shrink-0 rounded-xl border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 px-5 py-2.5 text-sm font-semibold hover:bg-red-50 dark:hover:bg-red-950/30 flex items-center gap-2 transition-colors"
+              >
+                <LogOut size={15} /> Sign Out
+              </button>
+            </div>
+          </div>
+
+        </div>
+      )}
+
       </section>
 
       {/* View Presents/Absents Lecture Attendance Modal */}
@@ -2398,6 +2748,39 @@ export default function Admin() {
               </select>
             </div>
             <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Teacher Profile</button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit Subject Modal */}
+      {showEditSubject && (
+        <Modal title="Edit Subject Details" onClose={() => setShowEditSubject(null)}>
+          <form onSubmit={updateSubject} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Subject Name / Course Title</label>
+              <input required type="text" placeholder="e.g. Mathematics" value={editSubjectForm.name} onChange={e => setEditSubjectForm({ name: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800" />
+            </div>
+            <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Changes</button>
+          </form>
+        </Modal>
+      )}
+
+      {/* Edit Teacher Modal */}
+      {showEditTeacher && (
+        <Modal title="Edit Instructor Profile" onClose={() => setShowEditTeacher(null)}>
+          <form onSubmit={updateTeacher} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Teacher Full Name</label>
+              <input required type="text" placeholder="e.g. Sir Ali Raza" value={editTeacherForm.name} onChange={e => setEditTeacherForm({ ...editTeacherForm, name: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            </div>
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Assign Subject Course</label>
+              <select required value={editTeacherForm.subjectId} onChange={e => setEditTeacherForm({ ...editTeacherForm, subjectId: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800">
+                <option value="">-- Choose Subject --</option>
+                {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Changes</button>
           </form>
         </Modal>
       )}
@@ -2775,6 +3158,7 @@ export default function Admin() {
         );
       })()}
 
+      
       {/* Lightbox Photo Zoom Modal */}
       {selectedZoomPhoto && (
         <div 

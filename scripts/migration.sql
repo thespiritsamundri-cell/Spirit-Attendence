@@ -142,4 +142,18 @@ INSERT INTO lectures (id, number, subject, start, "end", "meetLink") VALUES
   ('l5',5,'Computer','11:00','11:10','https://meet.google.com/demo-five')
 ON CONFLICT (id) DO NOTHING;
 
-SELECT 'Spirit Attendance DB ready! 8 tables created.' AS status;
+-- 9. ADMIN CREDENTIALS
+CREATE TABLE IF NOT EXISTS admin_credentials (
+  username  TEXT PRIMARY KEY,
+  password  TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE admin_credentials DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON admin_credentials TO anon, authenticated;
+
+INSERT INTO admin_credentials (username, password) VALUES
+  ('admin', 'spirit533')
+ON CONFLICT (username) DO NOTHING;
+
+SELECT 'Spirit Attendance DB ready! 9 tables created.' AS status;

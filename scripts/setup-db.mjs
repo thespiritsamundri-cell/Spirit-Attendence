@@ -108,6 +108,13 @@ CREATE TABLE IF NOT EXISTS devices (
   date        TEXT,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 9. Admin Credentials
+CREATE TABLE IF NOT EXISTS admin_credentials (
+  username    TEXT PRIMARY KEY,
+  password    TEXT NOT NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
 `;
 
 // ─── RLS: disable for now so the app can read/write without auth ───────────
@@ -121,6 +128,7 @@ ALTER TABLE lectures    DISABLE ROW LEVEL SECURITY;
 ALTER TABLE attendance  DISABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
 ALTER TABLE devices     DISABLE ROW LEVEL SECURITY;
+ALTER TABLE admin_credentials DISABLE ROW LEVEL SECURITY;
 `;
 
 // ─── Seed demo data ────────────────────────────────────────────────────────
@@ -247,6 +255,7 @@ async function main() {
   await upsert("teachers",  SEED_TEACHERS,  "teachers");
   await upsert("students",  SEED_STUDENTS,  "students");
   await upsert("lectures",  SEED_LECTURES,  "lectures");
+  await upsert("admin_credentials", [{ username: "admin", password: "admin123" }], "admin_credentials");
 
   console.log("\n✅ Database setup complete!\n");
   console.log("Demo student codes:");

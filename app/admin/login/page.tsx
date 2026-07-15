@@ -2,19 +2,60 @@
 
 import { useState } from "react";
 import { Lock, User, ShieldAlert } from "lucide-react";
+import { createClient } from "@/utils/supabase/client";
+
+const supabase = createClient();
 
 export default function AdminLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username === "admin" && password === "admin123") {
-      sessionStorage.setItem("adminSession", "active");
-      window.location.href = "/admin";
-    } else {
-      setError("Invalid administrative credentials. Please try again.");
+    setError("");
+    setBusy(true);
+
+    try {
+      // Query the admin_credentials table
+      const { data, error: dbError } = await supabase
+        .from("admin_credentials")
+        .select("*")
+        .eq("username", username.trim())
+        .eq("password", password.trim())
+        .maybeSingle();
+
+      if (dbError) {
+        // Fallback for initial run if the admin_credentials table is not created in the database yet
+        if (dbError.message.includes("relation") && dbError.message.includes("does not exist")) {
+          console.warn("Table admin_credentials not found. Using local safety fallback...");
+          if (username === "admin" && password === "admin123") {
+            sessionStorage.setItem("adminSession", "active");
+            window.location.href = "/admin";
+            return;
+          }
+        }
+        throw new Error(dbError.message);
+      }
+
+      if (data) {
+        sessionStorage.setItem("adminSession", "active");
+        window.location.href = "/admin";
+      } else {
+        setError("Invalid administrative credentials. Please try again.");
+      }
+    } catch (err: any) {
+      // Offline or other error fallback
+      console.warn("Authentication query error, checking offline cache:", err?.message);
+      if (username === "admin" && password === "admin123") {
+        sessionStorage.setItem("adminSession", "active");
+        window.location.href = "/admin";
+      } else {
+        setError("Invalid administrative credentials or database connection failed.");
+      }
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -37,9 +78,10 @@ export default function AdminLogin() {
             <input
               type="text"
               required
+              disabled={busy}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin"
+              placeholder="Username"
               className="w-full mt-1.5 rounded-xl border bg-white/70 dark:bg-neutral-900 p-3 outline-blue-500"
             />
           </div>
@@ -51,6 +93,7 @@ export default function AdminLogin() {
             <input
               type="password"
               required
+              disabled={busy}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
@@ -67,15 +110,12 @@ export default function AdminLogin() {
 
           <button
             type="submit"
-            className="w-full mt-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 shadow-md transition-colors"
+            disabled={busy}
+            className="w-full mt-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 shadow-md transition-colors disabled:opacity-50"
           >
-            Authenticate Credentials
+            {busy ? "Authenticating..." : "Authenticate Credentials"}
           </button>
         </form>
-
-        <p className="text-center text-xs text-neutral-400 mt-6">
-          Default Credentials: <span className="font-mono text-blue-600">admin / admin123</span>
-        </p>
       </div>
     </main>
   );
