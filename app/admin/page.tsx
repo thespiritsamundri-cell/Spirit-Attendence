@@ -23,6 +23,7 @@ import {
   Lock,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Download,
   FileText,
   Search,
@@ -71,6 +72,29 @@ const moduleCategories = [
   }
 ];
 
+const itemIcons: { [key: string]: any } = {
+  "Dashboard": BarChart3,
+  "Notifications": Megaphone,
+  "Classes": School,
+  "Teachers": Users,
+  "Subjects": BookOpen,
+  "Students": Users,
+  "Lecture Schedule": Clock,
+  "Today's Attendance": Calendar,
+  "Secret Code Generator": Lock,
+  "GPS Locations": MapPin,
+  "Photo Verification": Camera,
+  "Device Approvals": Smartphone,
+  "Attendance Reports": FileText,
+  "Teacher Reports": FileText,
+  "Student Reports": FileText,
+  "Monthly Reports": Calendar,
+  "Attendance Analytics": TrendingUp,
+  "Security Logs": ShieldCheck,
+  "School Information": School,
+  "System Settings": Save
+};
+
 const mockPhotoAyan = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23eff6ff"/><circle cx="50" cy="45" r="25" fill="%23bfdbfe"/><circle cx="42" cy="42" r="3" fill="%231e3a8a"/><circle cx="58" cy="42" r="3" fill="%231e3a8a"/><path d="M42 58 Q50 64 58 58" stroke="%231e3a8a" stroke-width="3" fill="none"/><text x="18" y="85" font-family="sans-serif" font-size="8" fill="%232563eb" font-weight="bold">Verified Ayan Ali</text></svg>`;
 const mockPhotoZainab = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 100 100"><rect width="100" height="100" fill="%23fdf2f8"/><circle cx="50" cy="45" r="25" fill="%23fbcfe8"/><circle cx="42" cy="42" r="3" fill="%23831843"/><circle cx="58" cy="42" r="3" fill="%23831843"/><path d="M42 56 Q50 62 58 56" stroke="%23831843" stroke-width="3" fill="none"/><text x="12" y="85" font-family="sans-serif" font-size="8" fill="%23db2777" font-weight="bold">Verified Zainab Fatima</text></svg>`;
 
@@ -79,6 +103,8 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [collapsedCategories, setCollapsedCategories] = useState<{ [key: string]: boolean }>({});
   const [theme, setTheme] = useState("light");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [applyLinkToAll, setApplyLinkToAll] = useState<boolean>(false);
 
   // Dynamic Database States
   const [classes, setClasses] = useState<any[]>([]);
@@ -763,16 +789,34 @@ export default function Admin() {
     };
 
     try {
-      const { error } = await supabase.from("lectures").update(updatedLec).eq("id", showEditLecture.id);
-      if (error) throw error;
+      if (applyLinkToAll) {
+        // Update all lecture meet links in Supabase
+        const { error } = await supabase.from("lectures").update({ meetLink: editLectureForm.meetLink });
+        if (error) throw error;
+        // Also update other specific fields for this lecture
+        const { error: error2 } = await supabase.from("lectures").update(updatedLec).eq("id", showEditLecture.id);
+        if (error2) throw error2;
+      } else {
+        const { error } = await supabase.from("lectures").update(updatedLec).eq("id", showEditLecture.id);
+        if (error) throw error;
+      }
     } catch (e) {
       console.warn("Supabase update failed, saving to local storage.");
     }
 
-    const updated = lectures.map(l => (l.id === showEditLecture.id ? updatedLec : l));
-    setLectures(updated);
-    localStorage.setItem("local_lectures", JSON.stringify(updated));
+    let updatedList;
+    if (applyLinkToAll) {
+      updatedList = lectures.map(l => {
+        const base = l.id === showEditLecture.id ? updatedLec : l;
+        return { ...base, meetLink: editLectureForm.meetLink };
+      });
+    } else {
+      updatedList = lectures.map(l => (l.id === showEditLecture.id ? updatedLec : l));
+    }
+    setLectures(updatedList);
+    localStorage.setItem("local_lectures", JSON.stringify(updatedList));
     setShowEditLecture(null);
+    setApplyLinkToAll(false);
   };
 
   const addNotification = (e: React.FormEvent) => {
@@ -974,42 +1018,70 @@ export default function Admin() {
   return (
     <main className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex text-neutral-900 dark:text-neutral-50 transition-colors duration-350">
       {/* Sidebar navigation panel */}
-      <aside className="hidden lg:block w-72 border-r bg-white p-4 dark:bg-neutral-900 dark:border-white/10 shrink-0">
-        <div className="flex items-center gap-2 mb-6">
-          <div className="h-9 w-9 rounded-xl bg-blue-600 text-white grid place-items-center font-bold">S</div>
-          <h1 className="text-xl font-bold">Smart Attendance</h1>
+      <aside className={`hidden lg:flex flex-col border-r bg-white dark:bg-neutral-900 dark:border-white/10 shrink-0 transition-all duration-350 ease-in-out ${isSidebarCollapsed ? "w-20 p-3" : "w-72 p-4"}`}>
+        <div className="flex items-center justify-between gap-2 mb-6">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div className="h-9 w-9 rounded-xl bg-blue-600 text-white grid place-items-center font-bold shrink-0">S</div>
+            {!isSidebarCollapsed && <h1 className="text-xl font-bold transition-all duration-300">Smart Attendance</h1>}
+          </div>
+          <button 
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
+            className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+          >
+            {isSidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
         </div>
-        <nav className="space-y-4 max-h-[82vh] overflow-auto pr-1">
+        
+        <nav className="space-y-4 flex-1 overflow-y-auto pr-1">
           {moduleCategories.map(cat => {
             const isCollapsed = collapsedCategories[cat.title];
             return (
               <div key={cat.title} className="space-y-1">
-                <button
-                  onClick={() => toggleCategory(cat.title)}
-                  className="w-full flex items-center justify-between text-xs font-bold text-neutral-400 dark:text-neutral-500 uppercase tracking-widest px-2 py-1 hover:text-neutral-600 dark:hover:text-white"
-                >
-                  <span>{cat.title}</span>
-                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
-                </button>
-                {!isCollapsed && (
-                  <div className="pl-1 space-y-0.5">
-                    {cat.items.map(m => (
-                      <button
-                        key={m}
-                        onClick={() => setActiveTab(m)}
-                        className={`w-full text-left rounded-xl px-3 py-1.5 text-sm transition-colors ${
-                          activeTab === m ? "bg-blue-600 text-white font-semibold shadow-sm" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
+                {!isSidebarCollapsed ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(cat.title)}
+                    className="w-full flex items-center justify-between text-xs font-extrabold text-amber-700/80 dark:text-amber-400/90 uppercase tracking-widest px-2.5 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800/40 rounded-xl transition-all duration-200"
+                  >
+                    <span>{cat.title}</span>
+                    <ChevronRight size={14} className={`transition-transform duration-250 ${isCollapsed ? "" : "rotate-90 text-amber-600"}`} />
+                  </button>
+                ) : (
+                  <hr className="my-2 border-neutral-100 dark:border-neutral-800" />
+                )}
+                
+                {(!isCollapsed || isSidebarCollapsed) && (
+                  <div className="pl-0 lg:pl-1 space-y-0.5">
+                    {cat.items.map(m => {
+                      const IconComponent = itemIcons[m] || BookOpen;
+                      return (
+                        <button
+                          key={m}
+                          onClick={() => setActiveTab(m)}
+                          title={isSidebarCollapsed ? m : undefined}
+                          className={`w-full flex items-center gap-3 rounded-xl transition-colors ${
+                            isSidebarCollapsed ? "justify-center p-2.5" : "px-3 py-1.5 text-sm"
+                          } ${
+                            activeTab === m ? "bg-blue-600 text-white font-semibold shadow-sm" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                          }`}
+                        >
+                          <IconComponent size={18} className="shrink-0" />
+                          {!isSidebarCollapsed && <span>{m}</span>}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             );
           })}
         </nav>
+
+        {!isSidebarCollapsed && (
+          <div className="mt-auto pt-4 border-t dark:border-neutral-800 text-[10px] text-neutral-400 text-center font-mono">
+            Developed by Mian Mudassar
+          </div>
+        )}
       </aside>
 
       {/* Main Panel Content */}
@@ -2518,6 +2590,18 @@ export default function Admin() {
             <div>
               <label className="text-xs font-bold uppercase text-neutral-400">Google Meet Link</label>
               <input required type="url" placeholder="https://meet.google.com/abc-defg-hij" value={editLectureForm.meetLink} onChange={e => setEditLectureForm({ ...editLectureForm, meetLink: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            </div>
+            <div className="flex items-center gap-2.5 py-1">
+              <input 
+                type="checkbox" 
+                id="applyLinkToAll"
+                checked={applyLinkToAll} 
+                onChange={e => setApplyLinkToAll(e.target.checked)} 
+                className="w-4 h-4 rounded border-neutral-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+              />
+              <label htmlFor="applyLinkToAll" className="text-xs font-medium text-neutral-600 dark:text-neutral-300 cursor-pointer select-none">
+                Apply this Meet link to all lecture windows in schedule
+              </label>
             </div>
             <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Changes</button>
           </form>

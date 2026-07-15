@@ -517,6 +517,9 @@ export default function Today() {
                       Father: <span>{student.fatherName}</span>
                     </p>
                   )}
+                  <div className="mt-2.5 pt-2 border-t dark:border-neutral-800 text-[10px] text-neutral-450 dark:text-neutral-500 font-mono">
+                    Developed by Mian Mudassar
+                  </div>
                 </div>
                 <div className="flex flex-col items-center gap-2">
                   {student.profilePhoto || student.profile_photo ? (
@@ -710,6 +713,11 @@ export default function Today() {
           </div>
         </div>
       )}
+
+      {/* Developer Credit Footer */}
+      <footer className="w-full text-center text-xs text-neutral-450 dark:text-neutral-500 font-mono py-6 mt-8">
+        Developed by Mian Mudassar
+      </footer>
     </main>
   );
 }

@@ -54,6 +54,10 @@ export default function Home() {
             Open Today Link
           </Link>
         </div>
+        <div className="mt-8 pt-6 border-t dark:border-neutral-800/80 flex items-center justify-between text-xs text-neutral-450 dark:text-neutral-500">
+          <span>Version 1.0</span>
+          <span>Developed by Mian Mudassar</span>
+        </div>
       </section>
     </main>
   );

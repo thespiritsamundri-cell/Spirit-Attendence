@@ -182,12 +182,15 @@ export default function StudentDashboard() {
         </div>
 
         {/* Profile Card Header */}
-        <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shadow-lg">
+        <div className="rounded-3xl bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white shadow-lg relative overflow-hidden">
           <p className="text-xs uppercase tracking-widest font-semibold text-white/70">Student Command Dashboard</p>
           <h1 className="text-3xl font-extrabold mt-1">{studentInfo.name}</h1>
           <p className="mt-1 text-sm text-white/80">
             Class {studentInfo.className || studentInfo.class || "10-A"} • Roll Number: {studentInfo.rollNumber} • Aggregate Attendance: <span className="font-bold underline">{studentInfo.attendanceRate || "92%"}</span>
           </p>
+          <div className="mt-3 pt-3 border-t border-white/20 text-[10px] text-white/60 font-mono">
+            Developed by Mian Mudassar
+          </div>
         </div>
 
         {/* Grid Navigation */}
@@ -395,6 +398,11 @@ export default function StudentDashboard() {
           </div>
         )}
       </section>
+
+      {/* Developer Credit Footer */}
+      <div className="mt-8 mb-4 text-center text-xs text-neutral-400 dark:text-neutral-500 font-mono">
+        Developed by Mian Mudassar
+      </div>
     </main>
   );
 }

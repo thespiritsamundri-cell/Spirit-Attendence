@@ -1,4 +1,16 @@
-node_modules
-.next/
+# dependencies
 node_modules/
+
+# Next.js
+.next/
+out/
+
+# Environment
 .env
+.env.local
+
+# Logs
+*.log
+
+# Build
+dist/
