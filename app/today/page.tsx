@@ -36,9 +36,31 @@ export default function Today() {
   const [permissionError, setPermissionError] = useState<string>("");
   const [currentSchool, setCurrentSchool] = useState(school);
 
+  // PWA states
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState<boolean>(false);
+
   useEffect(() => {
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
+
+    // Register Service Worker
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").then(
+          (reg) => console.log("SW registered:", reg.scope),
+          (err) => console.error("SW registration failed:", err)
+        );
+      });
+    }
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     const granted = localStorage.getItem("studentPermission") === "granted";
     setHasPermission(granted);
@@ -86,8 +108,21 @@ export default function Today() {
 
     checkLectures();
     const interval = setInterval(checkLectures, 20000);
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
   }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    console.log(`User response to install: ${outcome}`);
+    setDeferredPrompt(null);
+    setIsInstallable(false);
+  };
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -423,7 +458,11 @@ export default function Today() {
 
         {/* Portal Header */}
         <header className="glass rounded-3xl p-5 flex gap-4 items-center shadow-soft mb-6 dark:border-white/10">
-          <div className="h-16 w-16 rounded-2xl bg-blue-600 text-white grid place-items-center font-bold text-2xl shadow-sm">S</div>
+          <img 
+            src="https://res.cloudinary.com/dc4h1odcj/image/upload/v1776916361/tsss/branding/tss-main-school/lau6cwcyaf9ssiosqylc.png" 
+            alt="The Spirit School Logo" 
+            className="h-16 w-16 rounded-2xl object-contain bg-white p-1 border dark:border-neutral-800 shadow-sm"
+          />
           <div>
             <h1 className="text-2xl font-bold">{currentSchool.name}</h1>
             <p className="text-xs text-neutral-500 dark:text-white/60">{currentSchool.address} • {currentSchool.phone}</p>
@@ -451,6 +490,18 @@ export default function Today() {
               <p className="text-sm text-neutral-600 dark:text-white/70 leading-relaxed">
                 To verify your active session attendance, this device must grant one-time permissions to fetch GPS coordinates and perform a background camera validation.
               </p>
+              
+              {isInstallable && (
+                <button
+                  type="button"
+                  onClick={handleInstallClick}
+                  className="w-full rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold py-3.5 shadow-md transition-all text-sm flex items-center justify-center gap-2 border border-amber-500/30 hover:scale-[1.01]"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  Install TSS Attendance App
+                </button>
+              )}
+
               <button
                 onClick={requestPermissions}
                 disabled={busy}

@@ -1021,7 +1021,11 @@ export default function Admin() {
       <aside className={`hidden lg:flex flex-col border-r bg-white dark:bg-neutral-900 dark:border-white/10 shrink-0 transition-all duration-350 ease-in-out ${isSidebarCollapsed ? "w-20 p-3" : "w-72 p-4"}`}>
         <div className="flex items-center justify-between gap-2 mb-6">
           <div className="flex items-center gap-2 overflow-hidden">
-            <div className="h-9 w-9 rounded-xl bg-blue-600 text-white grid place-items-center font-bold shrink-0">S</div>
+            <img 
+              src="https://res.cloudinary.com/dc4h1odcj/image/upload/v1776916361/tsss/branding/tss-main-school/lau6cwcyaf9ssiosqylc.png" 
+              alt="Logo" 
+              className="h-9 w-9 rounded-xl object-contain bg-white p-0.5 border dark:border-neutral-800 shrink-0 shadow-sm"
+            />
             {!isSidebarCollapsed && <h1 className="text-xl font-bold transition-all duration-300">Smart Attendance</h1>}
           </div>
           <button 

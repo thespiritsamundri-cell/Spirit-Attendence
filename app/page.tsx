@@ -36,27 +36,34 @@ export default function Home() {
         </button>
       </div>
 
-      <section className="glass max-w-3xl rounded-3xl p-8 shadow-soft dark:border-white/10">
-        <p className="text-sm text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wider">
-          The Spirit School Sammy Campus Portal
-        </p>
-        <h1 className="mt-3 text-4xl md:text-6xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-50">
-          Smart Attendance Check-in
-        </h1>
-        <p className="mt-4 text-lg text-neutral-600 dark:text-white/70 leading-relaxed">
-          Dynamic Google Meet scheduling, live lecture auto-transitions, GPS location check, silent background photo audits, hardware verification, and admin reports.
-        </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            className="rounded-2xl bg-blue-600 px-6 py-3.5 text-white font-bold hover:bg-blue-700 transition-colors shadow-sm"
-            href="/today"
-          >
-            Open Today Link
-          </Link>
-        </div>
-        <div className="mt-8 pt-6 border-t dark:border-neutral-800/80 flex items-center justify-between text-xs text-neutral-450 dark:text-neutral-500">
-          <span>Version 1.0</span>
-          <span>Developed by Mian Mudassar</span>
+      <section className="glass max-w-3xl rounded-3xl p-8 shadow-soft dark:border-white/10 flex flex-col md:flex-row gap-6 items-center">
+        <img 
+          src="https://res.cloudinary.com/dc4h1odcj/image/upload/v1776916361/tsss/branding/tss-main-school/lau6cwcyaf9ssiosqylc.png" 
+          alt="The Spirit School Logo" 
+          className="h-24 w-24 object-contain bg-white p-2 rounded-3xl border dark:border-neutral-800 shadow-md shrink-0"
+        />
+        <div className="flex-1">
+          <p className="text-sm text-blue-600 dark:text-blue-400 font-semibold uppercase tracking-wider">
+            The Spirit School Sammy Campus Portal
+          </p>
+          <h1 className="mt-3 text-4xl md:text-5xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-50">
+            Smart Attendance Check-in
+          </h1>
+          <p className="mt-4 text-base text-neutral-600 dark:text-white/70 leading-relaxed">
+            Dynamic Google Meet scheduling, live lecture auto-transitions, GPS location check, silent background photo audits, hardware verification, and admin reports.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              className="rounded-2xl bg-blue-600 px-6 py-3.5 text-white font-bold hover:bg-blue-700 transition-colors shadow-sm"
+              href="/today"
+            >
+              Open Today Link
+            </Link>
+          </div>
+          <div className="mt-8 pt-6 border-t dark:border-neutral-800/80 flex items-center justify-between text-xs text-neutral-450 dark:text-neutral-500">
+            <span>Version 1.0</span>
+            <span>Developed by Mian Mudassar</span>
+          </div>
         </div>
       </section>
     </main>

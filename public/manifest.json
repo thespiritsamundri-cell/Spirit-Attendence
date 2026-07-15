@@ -1,1 +1,24 @@
-{"name":"Smart Attendance","short_name":"Attendance","start_url":"/today","display":"standalone","background_color":"#ffffff","theme_color":"#2783DE","icons":[]}
+{
+  "name": "Tss Attendence",
+  "short_name": "Tss Attendence",
+  "description": "Smart student attendance system for The Spirit School",
+  "start_url": "/today",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0a0a",
+  "theme_color": "#2563eb",
+  "icons": [
+    {
+      "src": "https://res.cloudinary.com/dc4h1odcj/image/upload/v1776916361/tsss/branding/tss-main-school/lau6cwcyaf9ssiosqylc.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://res.cloudinary.com/dc4h1odcj/image/upload/v1776916361/tsss/branding/tss-main-school/lau6cwcyaf9ssiosqylc.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
