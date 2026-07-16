@@ -26,6 +26,14 @@ export default function Today() {
     }
   }, [activeLecture, chosenSubject]);
 
+  // Re-filter lectures for student's class whenever student changes
+  useEffect(() => {
+    if (!student) return;
+    const filtered = allLectures.filter((l: any) => !l.classId || l.classId === student.classId);
+    const active = getActiveLecture(filtered.length > 0 ? filtered : allLectures);
+    setActiveLecture(active);
+  }, [student, allLectures]);
+
   // Secret Code login state (roll number removed — code-only login)
   const [secretCode, setSecretCode] = useState("");
   const [student, setStudent] = useState<any>(null);
@@ -408,11 +416,15 @@ export default function Today() {
 
         if (!dbDevices || dbDevices.length === 0) {
           // First registered device is auto-approved
+          // Look up the actual class name for this student
+          const localClasses = (() => { try { const r = localStorage.getItem("local_classes"); return r ? JSON.parse(r) : []; } catch { return []; } })();
+          const studentClassObj = localClasses.find((c: any) => c.id === student.classId);
+          const studentClassName = studentClassObj ? `${studentClassObj.name}-${studentClassObj.section}` : (student.className || student.class || "N/A");
           const firstDevice = {
             id: "dev_" + Date.now().toString().slice(-6),
             student_id: student.id,
             student: student.name,
-            class: student.className || student.class || "10-A",
+            class: studentClassName,
             device: deviceModelName,
             status: "Approved",
             date: new Date().toLocaleDateString()
@@ -435,11 +447,14 @@ export default function Today() {
             // Unapproved device check-in - file a pending registration if not already filed
             const isPending = dbDevices.some(d => d.status === "Pending" && d.device === deviceModelName);
             if (!isPending) {
+              const localClasses2 = (() => { try { const r = localStorage.getItem("local_classes"); return r ? JSON.parse(r) : []; } catch { return []; } })();
+              const studentClassObj2 = localClasses2.find((c: any) => c.id === student.classId);
+              const studentClassName2 = studentClassObj2 ? `${studentClassObj2.name}-${studentClassObj2.section}` : (student.className || student.class || "N/A");
               const pendingDevice = {
                 id: "dev_" + Date.now().toString().slice(-6),
                 student_id: student.id,
                 student: student.name,
-                class: student.className || student.class || "10-A",
+                class: studentClassName2,
                 device: deviceModelName,
                 status: "Pending",
                 date: new Date().toLocaleDateString()
@@ -475,10 +490,15 @@ export default function Today() {
         browserOk: true
       });
 
+      // Look up actual class name for the attendance record
+      const localClassesForRecord = (() => { try { const r = localStorage.getItem("local_classes"); return r ? JSON.parse(r) : []; } catch { return []; } })();
+      const attendanceClassObj = localClassesForRecord.find((c: any) => c.id === student.classId);
+      const attendanceClassName = attendanceClassObj ? `${attendanceClassObj.name}-${attendanceClassObj.section}` : (student.className || student.class || "N/A");
+
       const attendanceRecord = {
         student_id: student.id,
         student_name: student.name,
-        class_name: student.className || student.class || "10-A",
+        class_name: attendanceClassName,
         lecture_number: activeLecture.number,
         subject: resolvedActiveLecture?.subject || activeLecture.subject || "Science",
         date: todayKey(),

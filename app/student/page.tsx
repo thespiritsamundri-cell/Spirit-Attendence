@@ -186,7 +186,7 @@ export default function StudentDashboard() {
           <p className="text-xs uppercase tracking-widest font-semibold text-white/70">Student Command Dashboard</p>
           <h1 className="text-3xl font-extrabold mt-1">{studentInfo.name}</h1>
           <p className="mt-1 text-sm text-white/80">
-            Class {studentInfo.className || studentInfo.class || "10-A"} • Roll Number: {studentInfo.rollNumber} • Aggregate Attendance: <span className="font-bold underline">{studentInfo.attendanceRate || "92%"}</span>
+            Class {studentInfo.className || studentInfo.class || studentInfo.rollNumber?.split('-').slice(0,2).join('-') || "N/A"} • Roll Number: {studentInfo.rollNumber} • Aggregate Attendance: <span className="font-bold underline">{studentInfo.attendanceRate || studentInfo.attendance || "N/A"}</span>
           </p>
           <div className="mt-3 pt-3 border-t border-white/20 text-[10px] text-white/60 font-mono">
             Developed by Mian Mudassar
@@ -242,7 +242,7 @@ export default function StudentDashboard() {
               <div className="grid md:grid-cols-2 gap-4 text-sm">
                 <ProfileItem label="Student Full Name" value={studentInfo.name} />
                 <ProfileItem label="Father's Name" value={studentInfo.fatherName} />
-                <ProfileItem label="Class & Section" value={studentInfo.className || studentInfo.class || "10-A"} />
+                <ProfileItem label="Class & Section" value={studentInfo.className || studentInfo.class || studentInfo.rollNumber?.split('-').slice(0,2).join('-') || "N/A"} />
                 <ProfileItem label="Roll Number" value={studentInfo.rollNumber} />
                 <ProfileItem label="Registered Phone" value={studentInfo.phone || "+92 300 0000000"} />
                 <ProfileItem label="Verification Secret Code" value={studentInfo.code || studentInfo.secretCode} isCode />

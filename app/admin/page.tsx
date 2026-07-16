@@ -382,8 +382,9 @@ export default function Admin() {
     return `${hours12.toString().padStart(2, "0")}:${minutes} ${ampm}`;
   };
 
-  const [lectureForm, setLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "" });
-  const [editLectureForm, setEditLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "" });
+  const [lectureForm, setLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "", classId: "" });
+  const [editLectureForm, setEditLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "", classId: "" });
+  const [lectureScheduleClassFilter, setLectureScheduleClassFilter] = useState("");
   const [notificationForm, setNotificationForm] = useState({ title: "", message: "", targetClass: "All Classes" });
 
   // School Information Settings
@@ -446,7 +447,7 @@ export default function Admin() {
       const presentCount = studentLogs.filter(log => log.status === "Present").length;
       
       const studentClass = classes.find(c => c.id === s.classId);
-      const className = studentClass ? `${studentClass.name}-${studentClass.section}` : "10-A";
+      const className = studentClass ? `${studentClass.name}-${studentClass.section}` : "N/A";
       
       const classLogs = attendanceLogs.filter(log => log.class_name === className || log.class === className);
       const uniqueClassPeriods = Array.from(new Set(classLogs.map(l => `${l.date}_${l.lecture_number}`)));
@@ -968,7 +969,8 @@ export default function Admin() {
       teacher: lectureForm.teacher || null,
       subjectSecondary: lectureForm.subjectSecondary || null,
       teacherSecondary: lectureForm.teacherSecondary || null,
-      meetLinkSecondary: lectureForm.meetLinkSecondary || null
+      meetLinkSecondary: lectureForm.meetLinkSecondary || null,
+      classId: lectureForm.classId || null
     };
 
     try {
@@ -981,7 +983,7 @@ export default function Admin() {
     const updated = [...lectures, newLecture];
     setLectures(updated);
     localStorage.setItem("local_lectures", JSON.stringify(updated));
-    setLectureForm({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "" });
+    setLectureForm({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "", classId: "" });
     setShowAddLecture(false);
   };
 
@@ -999,7 +1001,8 @@ export default function Admin() {
       teacher: editLectureForm.teacher || null,
       subjectSecondary: editLectureForm.subjectSecondary || null,
       teacherSecondary: editLectureForm.teacherSecondary || null,
-      meetLinkSecondary: editLectureForm.meetLinkSecondary || null
+      meetLinkSecondary: editLectureForm.meetLinkSecondary || null,
+      classId: editLectureForm.classId || null
     };
 
     try {
@@ -1070,6 +1073,53 @@ export default function Admin() {
       localStorage.setItem(localKey, JSON.stringify(updated));
       return updated;
     });
+  };
+
+  const deleteStudent = async (studentId: string, studentName: string) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${studentName} and all associated attendance logs and device configurations?`);
+    if (!confirmDelete) return;
+
+    try {
+      // 1. Delete student from Supabase students table
+      const { error: studentErr } = await supabase.from("students").delete().eq("id", studentId);
+      if (studentErr) throw studentErr;
+
+      // Deleting referencing rows explicitly to ensure local/fallback consistency and prevent dependency lockups
+      await supabase.from("attendance").delete().eq("student_id", studentId);
+      await supabase.from("devices").delete().eq("student_id", studentId);
+    } catch (e) {
+      console.warn("Supabase delete student data failed, updating local storage fallback.", e);
+    }
+
+    // 2. Clear from React state and LocalStorage
+    // Students list
+    setStudents(prev => {
+      const updated = prev.filter(s => s.id !== studentId);
+      localStorage.setItem("local_students", JSON.stringify(updated));
+      return updated;
+    });
+
+    // Attendance logs
+    setAttendanceLogs(prev => {
+      const updated = prev.filter(log => log.student_id !== studentId && (log.studentName || log.student_name) !== studentName);
+      localStorage.setItem("local_attendance_logs", JSON.stringify(updated));
+      return updated;
+    });
+
+    // Pending Devices
+    setDevices(prev => {
+      const updated = prev.filter(d => d.student_id !== studentId && d.student !== studentName);
+      return updated;
+    });
+
+    // Approved Devices
+    setApprovedDevices(prev => {
+      const updated = prev.filter(d => d.student_id !== studentId && d.student !== studentName);
+      localStorage.setItem("local_approved_devices", JSON.stringify(updated));
+      return updated;
+    });
+
+    setAlerts(prev => [`Permanently deleted student "${studentName}" along with all their verification history, GPS logs, and device profiles.`, ...prev]);
   };
 
   const toggleCategory = (title: string) => {
@@ -1309,12 +1359,16 @@ export default function Admin() {
 
   const lectureMatrixToday = useMemo(() => {
     const targetDate = filterDate || new Date().toISOString().slice(0, 10);
-    const sortedLectures = [...lectures].sort((a, b) => a.number - b.number);
+    // Filter lectures: only show lectures belonging to this class (or legacy lectures with no classId)
+    const allSortedLectures = [...lectures].sort((a, b) => a.number - b.number);
 
     return classes.map((cls) => {
       const fullClassName = cls.section ? `${cls.name}-${cls.section}` : cls.name;
       const classStudents = students.filter((s) => s.classId === cls.id);
       const totalStudents = classStudents.length;
+
+      // For each class, show only lectures assigned to that class (or global lectures without classId)
+      const sortedLectures = allSortedLectures.filter(l => !l.classId || l.classId === cls.id);
 
       const lectureStats = sortedLectures.map((lec) => {
         const primaryPresents = new Set<string>();
@@ -1585,6 +1639,11 @@ export default function Admin() {
                                   {lec.subject}
                                   {lec.subjectSecondary && <span className="block text-[8px] text-indigo-500 font-semibold">{lec.subjectSecondary}</span>}
                                 </span>
+                                {lec.classId && (
+                                  <span className="block text-[8px] text-amber-500 font-bold mt-0.5">
+                                    {(() => { const c = classes.find(x => x.id === lec.classId); return c ? `${c.name}-${c.section}` : ""; })()}
+                                  </span>
+                                )}
                               </th>
                             ))
                         )}
@@ -2083,7 +2142,7 @@ export default function Admin() {
                           >
                             <Edit size={16} />
                           </button>
-                          <button onClick={() => deleteItem("students", s.id, setStudents, "local_students")} className="text-red-500 hover:text-red-700">
+                          <button onClick={() => deleteStudent(s.id, s.name)} className="text-red-500 hover:text-red-700">
                             <Trash2 size={16} />
                           </button>
                         </td>
@@ -2099,18 +2158,54 @@ export default function Admin() {
         {/* Lecture Schedule */}
         {activeTab === "Lecture Schedule" && (
           <div className="rounded-3xl border bg-white p-6 shadow-sm dark:bg-neutral-900 dark:border-white/10">
-            <div className="flex justify-between items-center mb-4">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 mb-4">
               <h3 className="font-bold text-lg">Lecture Windows Schedule</h3>
-              <button onClick={() => setShowAddLecture(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-xs font-semibold flex gap-1 items-center">
-                <Plus size={14} /> Add Lecture Window
-              </button>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={lectureScheduleClassFilter}
+                  onChange={e => setLectureScheduleClassFilter(e.target.value)}
+                  className="rounded-xl border bg-neutral-50 dark:bg-neutral-950 dark:border-neutral-800 py-2 px-3 text-sm outline-blue-500"
+                >
+                  <option value="">All Classes</option>
+                  {classes.map(c => <option key={c.id} value={c.id}>Class {c.name}-{c.section}</option>)}
+                </select>
+                <button onClick={() => setShowAddLecture(true)} className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl px-4 py-2 text-xs font-semibold flex gap-1 items-center">
+                  <Plus size={14} /> Add Lecture Window
+                </button>
+              </div>
             </div>
+
+            {/* Class tabs quick nav */}
+            {classes.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                  onClick={() => setLectureScheduleClassFilter("")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                    lectureScheduleClassFilter === "" ? "bg-blue-600 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                  }`}
+                >
+                  All Classes
+                </button>
+                {classes.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setLectureScheduleClassFilter(c.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
+                      lectureScheduleClassFilter === c.id ? "bg-blue-600 text-white" : "bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+                    }`}
+                  >
+                    Class {c.name}-{c.section}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm border-collapse">
                 <thead>
                   <tr className="border-b dark:border-neutral-700 text-neutral-500 font-medium">
                     <th className="py-3 px-4">Lec #</th>
+                    <th className="py-3 px-4">Class</th>
                     <th className="py-3 px-4">Subject</th>
                     <th className="py-3 px-4">Start Time</th>
                     <th className="py-3 px-4">End Time</th>
@@ -2119,9 +2214,22 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lectures.map(l => (
+                  {lectures
+                    .filter(l => !lectureScheduleClassFilter || l.classId === lectureScheduleClassFilter || (!l.classId && lectureScheduleClassFilter === ""))
+                    .map(l => {
+                    const lecClass = classes.find(c => c.id === l.classId);
+                    return (
                     <tr key={l.id} className="border-b dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                       <td className="py-3 px-4 font-bold">{l.number}</td>
+                      <td className="py-3 px-4">
+                        {lecClass ? (
+                          <span className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-lg font-bold text-xs">
+                            Class {lecClass.name}-{lecClass.section}
+                          </span>
+                        ) : (
+                          <span className="text-neutral-400 text-xs italic">Global</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4">
                         <div className="font-semibold text-neutral-900 dark:text-white">{l.subject || "No Subject Assigned"}</div>
                         {l.teacher && <div className="text-xs text-neutral-450 dark:text-neutral-500 mt-0.5 font-medium">Instructor: {l.teacher}</div>}
@@ -2170,7 +2278,8 @@ export default function Admin() {
                               teacher: l.teacher || "",
                               subjectSecondary: l.subjectSecondary || "",
                               teacherSecondary: l.teacherSecondary || "",
-                              meetLinkSecondary: l.meetLinkSecondary || ""
+                              meetLinkSecondary: l.meetLinkSecondary || "",
+                              classId: l.classId || ""
                             });
                             setShowEditLecture(l);
                           }}
@@ -2183,7 +2292,8 @@ export default function Admin() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -3329,6 +3439,18 @@ export default function Admin() {
       {showAddLecture && (
         <Modal title="Schedule Lecture Window" onClose={() => setShowAddLecture(false)}>
           <form onSubmit={addLecture} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Assign to Class</label>
+              <select
+                required
+                value={lectureForm.classId}
+                onChange={e => setLectureForm({ ...lectureForm, classId: e.target.value })}
+                className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800"
+              >
+                <option value="">-- Select Class --</option>
+                {classes.map(c => <option key={c.id} value={c.id}>Class {c.name}-{c.section}</option>)}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase text-neutral-400">Lecture Number</label>
@@ -3400,6 +3522,18 @@ export default function Admin() {
       {showEditLecture && (
         <Modal title={`Edit Lecture Window #${showEditLecture.number}`} onClose={() => setShowEditLecture(null)}>
           <form onSubmit={updateLecture} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400">Assign to Class</label>
+              <select
+                required
+                value={editLectureForm.classId || ""}
+                onChange={e => setEditLectureForm({ ...editLectureForm, classId: e.target.value })}
+                className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800"
+              >
+                <option value="">-- Select Class --</option>
+                {classes.map(c => <option key={c.id} value={c.id}>Class {c.name}-{c.section}</option>)}
+              </select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase text-neutral-400">Lecture Number</label>
@@ -3548,7 +3682,7 @@ export default function Admin() {
         const className = studentClass ? `${studentClass.name}-${studentClass.section}` : "N/A";
         
         const studentLogs = attendanceLogs.filter(log =>
-          log.student_id === viewStudentDetails.id
+          log.student_id === viewStudentDetails.id || (log.studentName || log.student_name) === viewStudentDetails.name
         );
         
         const filteredLogs = studentLogs.filter(log =>
@@ -3559,6 +3693,22 @@ export default function Admin() {
         const totalAbsent = studentLogs.filter(l => l.status === "Absent").length;
         const totalLectures = totalPresent + totalAbsent || 1;
         const rate = Math.round((totalPresent / totalLectures) * 100);
+
+        // Get lectures for this student's class to build checkbox grid
+        const classLectures = [...lectures]
+          .filter(l => !l.classId || l.classId === viewStudentDetails.classId)
+          .sort((a, b) => a.number - b.number);
+
+        // Build per-lecture attendance status for ALL logs (not just filtered month)
+        const lecAttendance = classLectures.map(lec => {
+          const attended = studentLogs.some(log =>
+            log.lecture_number === lec.number && log.status === "Present"
+          );
+          const count = studentLogs.filter(log =>
+            log.lecture_number === lec.number && log.status === "Present"
+          ).length;
+          return { lec, attended, count };
+        });
 
         return (
           <Modal title="Student Profile & Analytics" onClose={() => setViewStudentDetails(null)}>
@@ -3598,6 +3748,49 @@ export default function Admin() {
                   <p className="text-lg font-black text-indigo-600 dark:text-indigo-400">{rate}%</p>
                 </div>
               </div>
+
+              {/* Lecture Attendance Checkbox Grid */}
+              {classLectures.length > 0 && (
+                <div className="rounded-2xl border dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 p-4">
+                  <h4 className="text-xs font-bold uppercase text-neutral-500 mb-3 flex items-center gap-2">
+                    <Layers size={14} className="text-blue-500" />
+                    Lecture Attendance Overview
+                    <span className="text-[9px] normal-case font-normal text-neutral-400">(all time)</span>
+                  </h4>
+                  <div className="flex flex-wrap gap-3">
+                    {lecAttendance.map(({ lec, attended, count }) => (
+                      <div key={lec.id} className="flex flex-col items-center gap-1.5">
+                        <span className="text-[10px] text-neutral-500 font-bold text-center leading-tight max-w-[60px] truncate" title={lec.subject}>
+                          {lec.subject}
+                        </span>
+                        <div className={`w-10 h-10 rounded-xl border-2 flex items-center justify-center shadow-sm transition-all ${
+                          attended
+                            ? "bg-green-500 border-green-600 text-white"
+                            : "bg-white dark:bg-neutral-900 border-neutral-300 dark:border-neutral-700 text-neutral-300 dark:text-neutral-600"
+                        }`}>
+                          {attended ? (
+                            <Check size={18} strokeWidth={3} />
+                          ) : (
+                            <X size={16} strokeWidth={2} className="opacity-40" />
+                          )}
+                        </div>
+                        <span className="text-[9px] font-mono text-neutral-400">Lec {lec.number}</span>
+                        {count > 1 && (
+                          <span className="text-[9px] font-bold text-blue-500">{count}x</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-4 mt-3 pt-3 border-t dark:border-neutral-800 text-[10px] text-neutral-500">
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded bg-green-500 inline-block"></span> Present
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-3 h-3 rounded border border-neutral-300 dark:border-neutral-700 inline-block"></span> Absent / No Record
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between items-center">
