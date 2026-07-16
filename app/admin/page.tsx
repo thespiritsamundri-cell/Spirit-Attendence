@@ -1254,6 +1254,100 @@ export default function Admin() {
     setAlerts(prev => [`Denied hardware registration for ${req.student}`, ...prev]);
   };
 
+  const classAttendanceToday = useMemo(() => {
+    const targetDate = filterDate || new Date().toISOString().slice(0, 10);
+    return classes.map((cls) => {
+      const fullClassName = cls.section ? `${cls.name}-${cls.section}` : cls.name;
+      const classStudents = students.filter((s) => s.classId === cls.id);
+      const totalStudents = classStudents.length;
+
+      const presentStudentIds = new Set<string>();
+      
+      attendanceLogs.forEach((log) => {
+        if (log.date === targetDate && log.status === "Present") {
+          const logClass = (log.class_name || log.class || "").toLowerCase();
+          const matchesClass = logClass === fullClassName.toLowerCase() || logClass === cls.name.toLowerCase();
+          
+          if (matchesClass) {
+            if (log.student_id) {
+              const belongsToClass = classStudents.some((s) => s.id === log.student_id);
+              if (belongsToClass) {
+                presentStudentIds.add(log.student_id);
+              }
+            } else if (log.student_name) {
+              const matchedStudent = classStudents.find((s) => s.name === log.student_name);
+              if (matchedStudent) {
+                presentStudentIds.add(matchedStudent.id);
+              }
+            }
+          }
+        }
+      });
+
+      const presents = presentStudentIds.size;
+      const absents = Math.max(0, totalStudents - presents);
+      const percent = totalStudents > 0 ? Math.round((presents / totalStudents) * 100) : 0;
+
+      return {
+        id: cls.id,
+        name: fullClassName,
+        total: totalStudents,
+        presents,
+        absents,
+        percent,
+      };
+    });
+  }, [classes, students, attendanceLogs, filterDate]);
+
+  const lectureMatrixToday = useMemo(() => {
+    const targetDate = filterDate || new Date().toISOString().slice(0, 10);
+    const sortedLectures = [...lectures].sort((a, b) => a.number - b.number);
+
+    return classes.map((cls) => {
+      const fullClassName = cls.section ? `${cls.name}-${cls.section}` : cls.name;
+      const classStudents = students.filter((s) => s.classId === cls.id);
+      const totalStudents = classStudents.length;
+
+      const lectureStats = sortedLectures.map((lec) => {
+        const presentStudentIds = new Set<string>();
+
+        attendanceLogs.forEach((log) => {
+          if (log.date === targetDate && log.lecture_number === lec.number && log.status === "Present") {
+            const logClass = (log.class_name || log.class || "").toLowerCase();
+            const matchesClass = logClass === fullClassName.toLowerCase() || logClass === cls.name.toLowerCase();
+            
+            if (matchesClass) {
+              if (log.student_id) {
+                const belongsToClass = classStudents.some((s) => s.id === log.student_id);
+                if (belongsToClass) {
+                  presentStudentIds.add(log.student_id);
+                }
+              } else if (log.student_name) {
+                const matchedStudent = classStudents.find((s) => s.name === log.student_name);
+                if (matchedStudent) {
+                  presentStudentIds.add(matchedStudent.id);
+                }
+              }
+            }
+          }
+        });
+
+        return {
+          lectureNumber: lec.number,
+          presents: presentStudentIds.size,
+          total: totalStudents,
+        };
+      });
+
+      return {
+        classId: cls.id,
+        className: fullClassName,
+        total: totalStudents,
+        lectures: lectureStats,
+      };
+    });
+  }, [classes, students, lectures, attendanceLogs, filterDate]);
+
   return (
     <main className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex text-neutral-900 dark:text-neutral-50 transition-colors duration-350">
       {/* Sidebar navigation panel */}
@@ -1365,6 +1459,152 @@ export default function Admin() {
               <StatsCard label="Pending Devices" value={devices.length} icon={Smartphone} onClick={() => navigateTab("Device Approvals")} />
               <StatsCard label="Active Lecture Schedule" value={lectures.length} icon={Clock} onClick={() => navigateTab("Lecture Schedule")} />
               <StatsCard label="Photo Verifications Review" value={Object.keys(studentPhotoGroups).length} icon={Camera} onClick={() => navigateTab("Photo Verification")} />
+            </div>
+
+            {/* Today's Attendance Overview & Matrix */}
+            <div className="mt-6 grid xl:grid-cols-[1fr_1.5fr] gap-6">
+              {/* Class-wise Today's Status */}
+              <div className="rounded-3xl border bg-white p-6 dark:bg-neutral-900 dark:border-white/10 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-extrabold text-lg flex items-center gap-2">
+                      <School className="text-blue-600 dark:text-blue-400" size={20} />
+                      Class-wise Status
+                    </h3>
+                    <span className="text-[10px] bg-neutral-100 dark:bg-neutral-800 text-neutral-500 font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                      Date: {filterDate}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    {classAttendanceToday.length === 0 ? (
+                      <p className="text-sm text-neutral-400 italic py-6 text-center">No classes registered.</p>
+                    ) : (
+                      classAttendanceToday.map((item) => (
+                        <div key={item.id} className="p-4 rounded-2xl border border-neutral-100 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/20 hover:scale-[1.01] transition-transform duration-200">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <h4 className="font-extrabold text-base text-neutral-900 dark:text-white">
+                                {item.name.toLowerCase().startsWith("class") ? item.name : `Class ${item.name}`}
+                              </h4>
+                              <p className="text-xs text-neutral-450 dark:text-neutral-500 mt-0.5">
+                                Total: {item.total} registered students
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-bold text-green-600 dark:text-green-450 bg-green-50 dark:bg-green-950/40 px-2 py-0.5 rounded-lg mr-1.5">
+                                {item.presents} Present
+                              </span>
+                              <span className="text-xs font-bold text-red-650 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2 py-0.5 rounded-lg">
+                                {item.absents} Absent
+                              </span>
+                            </div>
+                          </div>
+                          <div className="mt-3">
+                            <div className="flex justify-between text-xs font-bold text-neutral-500 mb-1">
+                              <span>Attendance Rate</span>
+                              <span className="font-mono">{item.percent}%</span>
+                            </div>
+                            <div className="h-2 w-full bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                  item.percent >= 90
+                                    ? "bg-green-500"
+                                    : item.percent >= 75
+                                    ? "bg-blue-500"
+                                    : item.percent > 0
+                                    ? "bg-amber-500"
+                                    : "bg-neutral-300 dark:bg-neutral-700"
+                                }`}
+                                style={{ width: `${item.percent}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Lecture-wise Attendance Matrix */}
+              <div className="rounded-3xl border bg-white p-6 dark:bg-neutral-900 dark:border-white/10 shadow-sm">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-extrabold text-lg flex items-center gap-2">
+                    <Calendar className="text-indigo-600 dark:text-indigo-400" size={20} />
+                    Lecture-wise Attendance Matrix
+                  </h3>
+                  <span className="text-[10px] bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-300 font-bold px-2 py-1 rounded-full uppercase tracking-wider">
+                    Today
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto border dark:border-neutral-800 rounded-2xl">
+                  <table className="w-full text-left text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/40 text-neutral-500 font-bold text-xs uppercase tracking-wider">
+                        <th className="py-3 px-4 font-extrabold">Class</th>
+                        {lectures.length === 0 ? (
+                          <th className="py-3 px-4 text-center">No Lectures Scheduled</th>
+                        ) : (
+                          [...lectures]
+                            .sort((a, b) => a.number - b.number)
+                            .map((lec) => (
+                              <th key={lec.id} className="py-3 px-4 text-center">
+                                Lec {lec.number}
+                                <span className="block text-[9px] text-neutral-400 normal-case font-mono mt-0.5">
+                                  {lec.subject}
+                                </span>
+                              </th>
+                            ))
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lectureMatrixToday.length === 0 ? (
+                        <tr>
+                          <td colSpan={lectures.length + 1} className="py-6 text-center text-sm text-neutral-400 italic">
+                            No classes or lectures registered in database.
+                          </td>
+                        </tr>
+                      ) : (
+                        lectureMatrixToday.map((row) => (
+                          <tr key={row.classId} className="border-b dark:border-neutral-850 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/10 transition-colors">
+                            <td className="py-4 px-4 font-bold text-neutral-900 dark:text-white">
+                              {row.className}
+                            </td>
+                            {row.lectures.map((lec, idx) => {
+                              const ratio = row.total > 0 ? lec.presents / row.total : 0;
+                              let badgeColor = "bg-neutral-100 dark:bg-neutral-800 text-neutral-500";
+                              if (lec.presents > 0) {
+                                if (ratio >= 0.9) {
+                                  badgeColor = "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50";
+                                } else if (ratio >= 0.5) {
+                                  badgeColor = "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50";
+                                } else {
+                                  badgeColor = "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50";
+                                }
+                              } else if (row.total > 0) {
+                                badgeColor = "bg-red-550/10 dark:bg-red-950/20 text-red-600 dark:text-red-405 border border-red-100 dark:border-red-950/50";
+                              }
+                              return (
+                                <td key={idx} className="py-4 px-4 text-center">
+                                  <span className={`inline-flex flex-col items-center justify-center min-w-[56px] py-1 px-2.5 rounded-xl font-bold text-xs shadow-sm ${badgeColor}`}>
+                                    <span className="font-mono">{lec.presents} / {lec.total}</span>
+                                    <span className="text-[8px] opacity-75 font-normal tracking-wide mt-0.5">
+                                      {row.total > 0 ? `${Math.round(ratio * 100)}%` : "0%"}
+                                    </span>
+                                  </span>
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
 
             <div className="mt-6 grid xl:grid-cols-2 gap-4">
