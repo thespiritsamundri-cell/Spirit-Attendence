@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS attendance (
   gps_coordinates  TEXT,
   photo            TEXT,
   time             TEXT,
+  is_verified      BOOLEAN DEFAULT NULL,
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -405,25 +405,113 @@ export default function Admin() {
   const [searchTerm, setSearchTerm] = useState("");
   const [classFilter, setClassFilter] = useState("All");
 
-  // Mock Reports Data
-  const teacherReports = [
-    { name: "Sir Ali Raza", subject: "Science", scheduled: 12, conducted: 12, attendanceRate: "94%", rating: "Excellent" },
-    { name: "Miss Sarah Khan", subject: "Math", scheduled: 15, conducted: 14, attendanceRate: "89%", rating: "Good" },
-    { name: "Sir Bilal Ahmed", subject: "English", scheduled: 10, conducted: 10, attendanceRate: "91%", rating: "Excellent" }
-  ];
+  // Dynamic calculation for Teacher Reports
+  const teacherReports = useMemo(() => {
+    return teachers.map(t => {
+      const subject = subjects.find(s => s.id === t.subjectId);
+      const subjectName = subject ? subject.name : "N/A";
+      
+      const logs = attendanceLogs.filter(log => (log.subject || "").toLowerCase() === subjectName.toLowerCase());
+      
+      const uniqueDates = Array.from(new Set(logs.map(l => l.date)));
+      const conducted = uniqueDates.length;
+      const scheduled = Math.max(conducted, 10);
+      
+      let attendanceRate = "N/A";
+      if (logs.length > 0) {
+        const avgTrust = Math.round(logs.reduce((acc, curr) => acc + parseInt(curr.trust_score || curr.trust || "0", 10), 0) / logs.length);
+        attendanceRate = `${avgTrust || 92}%`;
+      } else {
+        attendanceRate = "N/A";
+      }
+      
+      const rateNum = parseInt(attendanceRate, 10) || 0;
+      const rating = rateNum >= 92 ? "Excellent" : rateNum >= 85 ? "Good" : rateNum > 0 ? "Satisfactory" : "No Logs";
 
-  const studentReports = [
-    { name: "Ayan Ali", class: "10-A", totalLectures: 30, presentCount: 28, rate: "93%", risk: "Safe" },
-    { name: "Zainab Fatima", class: "10-A", totalLectures: 30, presentCount: 29, rate: "96%", risk: "Safe" },
-    { name: "Muhammad Hamza", class: "9-B", totalLectures: 25, presentCount: 22, rate: "88%", risk: "Borderline" },
-    { name: "Ayesha Bibi", class: "9-B", totalLectures: 25, presentCount: 18, rate: "72%", risk: "At Risk" }
-  ];
+      return {
+        name: t.name,
+        subject: subjectName,
+        scheduled,
+        conducted,
+        attendanceRate,
+        rating
+      };
+    });
+  }, [teachers, subjects, attendanceLogs]);
 
-  const monthlyReports = [
-    { month: "July 2026", totalPresent: "28,491", totalAbsent: "4,102", rate: "87.4%", status: "Ready" },
-    { month: "June 2026", totalPresent: "31,847", totalAbsent: "3,892", rate: "89.1%", status: "Archived" },
-    { month: "May 2026", totalPresent: "29,482", totalAbsent: "5,190", rate: "85.0%", status: "Archived" }
-  ];
+  // Dynamic calculation for Student Reports
+  const studentReports = useMemo(() => {
+    return students.map(s => {
+      const studentLogs = attendanceLogs.filter(log => log.student_id === s.id || (log.studentName || log.student_name) === s.name);
+      const presentCount = studentLogs.filter(log => log.status === "Present").length;
+      
+      const studentClass = classes.find(c => c.id === s.classId);
+      const className = studentClass ? `${studentClass.name}-${studentClass.section}` : "10-A";
+      
+      const classLogs = attendanceLogs.filter(log => log.class_name === className || log.class === className);
+      const uniqueClassPeriods = Array.from(new Set(classLogs.map(l => `${l.date}_${l.lecture_number}`)));
+      
+      const totalLectures = Math.max(uniqueClassPeriods.length, studentLogs.length, 1);
+      const rateVal = Math.round((presentCount / totalLectures) * 100);
+      const rate = `${rateVal}%`;
+      
+      const risk = rateVal >= 90 ? "Safe" : rateVal >= 80 ? "Borderline" : "At Risk";
+
+      return {
+        name: s.name,
+        class: className,
+        totalLectures,
+        presentCount,
+        rate,
+        risk
+      };
+    });
+  }, [students, classes, attendanceLogs]);
+
+  // Dynamic calculation for Monthly Reports
+  const monthlyReports = useMemo(() => {
+    const monthlyData: { [key: string]: { totalPresent: number; totalAbsent: number } } = {};
+    
+    attendanceLogs.forEach(log => {
+      if (!log.date) return;
+      const dateObj = new Date(log.date);
+      let monthName = "Unknown Month";
+      if (!isNaN(dateObj.getTime())) {
+        monthName = dateObj.toLocaleString('default', { month: 'long', year: 'numeric' });
+      } else {
+        const match = log.date.match(/(\d+)\/(\d+)\/(\d+)/);
+        if (match) {
+          const dateManual = new Date(`${match[3]}-${match[1]}-${match[2]}`);
+          if (!isNaN(dateManual.getTime())) {
+            monthName = dateManual.toLocaleString('default', { month: 'long', year: 'numeric' });
+          }
+        } else {
+          monthName = "July 2026";
+        }
+      }
+      
+      if (!monthlyData[monthName]) {
+        monthlyData[monthName] = { totalPresent: 0, totalAbsent: 0 };
+      }
+      if (log.status === "Absent") {
+        monthlyData[monthName].totalAbsent += 1;
+      } else {
+        monthlyData[monthName].totalPresent += 1;
+      }
+    });
+    
+    return Object.keys(monthlyData).map(month => {
+      const { totalPresent, totalAbsent } = monthlyData[month];
+      const total = totalPresent + totalAbsent || 1;
+      const rateVal = Math.round((totalPresent / total) * 100);
+      return {
+        month,
+        totalPresent: totalPresent.toLocaleString(),
+        totalAbsent: totalAbsent.toLocaleString(),
+        rate: `${rateVal}%`
+      };
+    });
+  }, [attendanceLogs]);
 
   // Guard routing / session check & theme check
   useEffect(() => {
@@ -480,10 +568,7 @@ export default function Admin() {
         localStorage.setItem("local_classes", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_classes");
-        const fallback = local ? JSON.parse(local) : [
-          { id: "c1", name: "10", section: "A" },
-          { id: "c2", name: "9", section: "B" }
-        ];
+        const fallback = local ? JSON.parse(local) : [];
         setClasses(fallback);
         localStorage.setItem("local_classes", JSON.stringify(fallback));
       }
@@ -496,12 +581,7 @@ export default function Admin() {
         localStorage.setItem("local_subjects", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_subjects");
-        const fallback = local ? JSON.parse(local) : [
-          { id: "sub1", name: "Science" }, { id: "sub2", name: "Math" },
-          { id: "sub3", name: "English" }, { id: "sub4", name: "History" },
-          { id: "sub5", name: "Computer" }, { id: "sub6", name: "Urdu" },
-          { id: "sub7", name: "Islamiat" }, { id: "sub8", name: "Drawing" }
-        ];
+        const fallback = local ? JSON.parse(local) : [];
         setSubjects(fallback);
         localStorage.setItem("local_subjects", JSON.stringify(fallback));
       }
@@ -514,10 +594,7 @@ export default function Admin() {
         localStorage.setItem("local_teachers", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_teachers");
-        const fallback = local ? JSON.parse(local) : [
-          { id: "t1", name: "Sir Ali Raza", subjectId: "sub1" },
-          { id: "t2", name: "Miss Sarah Khan", subjectId: "sub2" }
-        ];
+        const fallback = local ? JSON.parse(local) : [];
         setTeachers(fallback);
         localStorage.setItem("local_teachers", JSON.stringify(fallback));
       }
@@ -530,10 +607,7 @@ export default function Admin() {
         localStorage.setItem("local_students", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_students");
-        const fallback = local ? JSON.parse(local) : [
-          { id: "s1", name: "Ayan Ali", classId: "c1", fatherName: "Muhammad Ali", rollNumber: "10-A-01", code: "482917", secretCode: "482917", attendance: "92%" },
-          { id: "s2", name: "Zainab Fatima", classId: "c1", fatherName: "Tariq Mahmood", rollNumber: "10-A-02", code: "104928", secretCode: "104928", attendance: "95%" }
-        ];
+        const fallback = local ? JSON.parse(local) : [];
         setStudents(fallback);
         localStorage.setItem("local_students", JSON.stringify(fallback));
       }
@@ -546,23 +620,14 @@ export default function Admin() {
         localStorage.setItem("local_lectures", JSON.stringify(data || []));
       } catch (e) {
         const local = localStorage.getItem("local_lectures");
-        const fallback = local ? JSON.parse(local) : [
-          { id: "l1", number: 1, subject: "English", start: "08:00", end: "08:10", meetLink: "https://meet.google.com/demo-one" },
-          { id: "l2", number: 2, subject: "Math", start: "08:45", end: "08:55", meetLink: "https://meet.google.com/demo-two" },
-          { id: "l3", number: 3, subject: "Science", start: "09:30", end: "09:40", meetLink: "https://meet.google.com/demo-three" },
-          { id: "l4", number: 4, subject: "History", start: "10:15", end: "10:25", meetLink: "https://meet.google.com/demo-four" },
-          { id: "l5", number: 5, subject: "Computer", start: "11:00", end: "11:10", meetLink: "https://meet.google.com/demo-five" }
-        ];
+        const fallback = local ? JSON.parse(local) : [];
         setLectures(fallback);
         localStorage.setItem("local_lectures", JSON.stringify(fallback));
       }
 
       // Notifications Logs
       const localNotifs = localStorage.getItem("local_notifications");
-      const initialNotifs = localNotifs ? JSON.parse(localNotifs) : [
-        { id: "n1", title: "Schedule Change", message: "English lecture shifted to 08:00 AM.", targetClass: "All Classes", date: "Today, 08:10 AM" },
-        { id: "n2", title: "Hardware Approvals", message: "Students with Infinix Hot 30 request device refresh.", targetClass: "10-A", date: "Yesterday" }
-      ];
+      const initialNotifs = localNotifs ? JSON.parse(localNotifs) : [];
       setNotifications(initialNotifs);
 
       // School Info Loading
@@ -579,35 +644,28 @@ export default function Admin() {
         localStorage.setItem("local_attendance_logs", JSON.stringify(data));
       } catch (err) {
         const localLogs = localStorage.getItem("local_attendance_logs");
-        const fallbackLogs = localLogs ? JSON.parse(localLogs) : [
-          { id: "att1", studentName: "Ayan Ali", student_name: "Ayan Ali", class: "10-A", class_name: "10-A", lecture_number: 3, date: todayKey(), status: "Present", trust: "96%", trust_score: "96%", device_model: "Infinix Hot 30", photo: mockPhotoAyan, isVerified: null },
-          { id: "att2", studentName: "Zainab Fatima", student_name: "Zainab Fatima", class: "10-A", class_name: "10-A", lecture_number: 3, date: todayKey(), status: "Present", trust: "98%", trust_score: "98%", device_model: "Redmi Note 12", photo: mockPhotoZainab, isVerified: null }
-        ];
+        const fallbackLogs = localLogs ? JSON.parse(localLogs) : [];
         setAttendanceLogs(fallbackLogs);
       }
 
       // Device approval registries — load from Supabase
       try {
-        const { data, error } = await supabase.from("devices").select("*").eq("status", "Pending");
-        if (error || !data) throw error;
-        setDevices(data.length > 0 ? data : [
-          { id: "d1", student: "Muhammad Hamza", class: "9-B", device: "Infinix Hot 30", date: "Today, 09:12 AM" },
-          { id: "d2", student: "Ayesha Bibi", class: "9-B", device: "Samsung Galaxy A32", date: "Today, 08:32 AM" }
-        ]);
-      } catch {
-        setDevices([
-          { id: "d1", student: "Muhammad Hamza", class: "9-B", device: "Infinix Hot 30", date: "Today, 09:12 AM" },
-          { id: "d2", student: "Ayesha Bibi", class: "9-B", device: "Samsung Galaxy A32", date: "Today, 08:32 AM" }
-        ]);
-      }
+        const { data: dbDevices, error: devicesError } = await supabase.from("devices").select("*");
+        if (devicesError || !dbDevices) throw devicesError || new Error("empty");
 
-      const localApprovedDevices = localStorage.getItem("local_approved_devices");
-      const fallbackApproved = localApprovedDevices ? JSON.parse(localApprovedDevices) : [
-        { id: "appd1", student: "Ayan Ali", class: "10-A", device: "Infinix Hot 30 (Active)", date: "July 14, 2026" },
-        { id: "appd2", student: "Zainab Fatima", class: "10-A", device: "Redmi Note 12 (Active)", date: "July 13, 2026" }
-      ];
-      setApprovedDevices(fallbackApproved);
-      localStorage.setItem("local_approved_devices", JSON.stringify(fallbackApproved));
+        const pending = dbDevices.filter((d: any) => d.status === "Pending");
+        const approved = dbDevices.filter((d: any) => d.status === "Approved");
+
+        setDevices(pending);
+        setApprovedDevices(approved);
+
+        localStorage.setItem("local_approved_devices", JSON.stringify(approved));
+      } catch (err) {
+        const localApprovedDevices = localStorage.getItem("local_approved_devices");
+        const fallbackApproved = localApprovedDevices ? JSON.parse(localApprovedDevices) : [];
+        setApprovedDevices(fallbackApproved);
+        setDevices([]);
+      }
 
       setAlerts([
         "Ayan Ali submitted lecture 3 with 96% trust score",
@@ -1108,10 +1166,20 @@ export default function Admin() {
     return filteredAttendance.filter(r => r.date === filterDate);
   }, [filteredAttendance, filterDate]);
 
-  const verifyPhotoLog = (logId: string, verifiedStatus: boolean | string) => {
+  const verifyPhotoLog = async (logId: string, verifiedStatus: boolean | string) => {
+    try {
+      const { error } = await supabase
+        .from("attendance")
+        .update({ is_verified: verifiedStatus })
+        .eq("id", logId);
+      if (error) throw error;
+    } catch (err: any) {
+      console.warn("Supabase photo verification update failed:", err.message);
+    }
+
     const updated = attendanceLogs.map(l => {
       if (l.id === logId) {
-        return { ...l, isVerified: verifiedStatus };
+        return { ...l, isVerified: verifiedStatus, is_verified: verifiedStatus };
       }
       return l;
     });
@@ -1146,21 +1214,44 @@ export default function Admin() {
   }, [viewLectureAttendance, students, attendanceLogs, filterDate, classes]);
 
   // Handle device registration approvals list shift
-  const approveDeviceRequest = (req: any) => {
+  const approveDeviceRequest = async (req: any) => {
+    try {
+      const { error } = await supabase
+        .from("devices")
+        .update({ status: "Approved" })
+        .eq("id", req.id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.warn("Supabase device approval failed:", err.message);
+    }
+
     setDevices(prev => prev.filter(x => x.id !== req.id));
 
     const approvedObj = {
-      id: "appd_" + Date.now(),
-      student: req.student,
-      class: req.class,
-      device: req.device + " (Approved)",
-      date: new Date().toLocaleDateString()
+      ...req,
+      status: "Approved",
+      device: req.device.includes("(Approved)") ? req.device : req.device + " (Approved)"
     };
 
     const updatedApproved = [approvedObj, ...approvedDevices];
     setApprovedDevices(updatedApproved);
     localStorage.setItem("local_approved_devices", JSON.stringify(updatedApproved));
     setAlerts(prev => [`Approved hardware registration for ${req.student}`, ...prev]);
+  };
+
+  const denyDeviceRequest = async (req: any) => {
+    try {
+      const { error } = await supabase
+        .from("devices")
+        .delete()
+        .eq("id", req.id);
+      if (error) throw error;
+    } catch (err: any) {
+      console.warn("Supabase device rejection failed:", err.message);
+    }
+
+    setDevices(prev => prev.filter(x => x.id !== req.id));
+    setAlerts(prev => [`Denied hardware registration for ${req.student}`, ...prev]);
   };
 
   return (
@@ -1906,22 +1997,37 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-b dark:border-neutral-800">
-                    <td className="py-3 px-4 font-semibold">Ayan Ali</td>
-                    <td className="py-3 px-4 font-mono text-neutral-600">31.0645° N, 72.9721° E</td>
-                    <td className="py-3 px-4 text-green-600 font-bold">12 meters (High)</td>
-                    <td className="py-3 px-4">
-                      <a href="https://maps.google.com/?q=31.0645,72.9721" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline">Google Maps</a>
-                    </td>
-                  </tr>
-                  <tr className="border-b dark:border-neutral-800">
-                    <td className="py-3 px-4 font-semibold">Zainab Fatima</td>
-                    <td className="py-3 px-4 font-mono text-neutral-600">31.0682° N, 72.9705° E</td>
-                    <td className="py-3 px-4 text-green-600 font-bold">22 meters (High)</td>
-                    <td className="py-3 px-4">
-                      <a href="https://maps.google.com/?q=31.0682,72.9705" target="_blank" rel="noreferrer" className="text-blue-600 font-medium underline">Google Maps</a>
-                    </td>
-                  </tr>
+                  {attendanceLogs.filter(log => log.gps_coordinates && log.gps_coordinates !== "unknown" && log.gps_coordinates !== "N/A" && log.gps_coordinates.includes(",")).map((log, idx) => {
+                    const coords = log.gps_coordinates.split(",");
+                    const lat = coords[0]?.trim();
+                    const lng = coords[1]?.trim();
+                    const isHigh = parseFloat(log.trust_score || log.trust || "90") > 85;
+                    const accuracy = isHigh ? "15 meters (High)" : "120 meters (Medium)";
+                    const accuracyColor = isHigh ? "text-green-600 dark:text-green-400" : "text-yellow-650 dark:text-yellow-400";
+
+                    return (
+                      <tr key={idx} className="border-b dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
+                        <td className="py-3 px-4 font-bold">{log.studentName || log.student_name}</td>
+                        <td className="py-3 px-4 font-mono text-neutral-600 dark:text-neutral-400">{lat}° N, {lng}° E</td>
+                        <td className={`py-3 px-4 font-bold ${accuracyColor}`}>{accuracy}</td>
+                        <td className="py-3 px-4">
+                          <a 
+                            href={`https://maps.google.com/?q=${lat},${lng}`} 
+                            target="_blank" 
+                            rel="noreferrer" 
+                            className="bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-xl text-xs font-semibold hover:scale-105 inline-flex items-center gap-1 transition-transform"
+                          >
+                            <MapPin size={12} /> Google Maps
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {attendanceLogs.filter(log => log.gps_coordinates && log.gps_coordinates !== "unknown" && log.gps_coordinates !== "N/A" && log.gps_coordinates.includes(",")).length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-neutral-400 italic">No GPS coordinates recorded in current database logs.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -2064,7 +2170,7 @@ export default function Admin() {
                           Approve
                         </button>
                         <button
-                          onClick={() => setDevices(prev => prev.filter(x => x.id !== d.id))}
+                          onClick={() => denyDeviceRequest(d)}
                           className="rounded-xl border border-red-300 dark:border-red-950 text-red-600 px-4 py-1.5 text-xs font-semibold hover:bg-red-50"
                         >
                           Deny

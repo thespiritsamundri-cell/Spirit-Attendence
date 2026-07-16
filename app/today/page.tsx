@@ -99,7 +99,7 @@ export default function Today() {
         }
       } catch (err) {
         const localLec = localStorage.getItem("local_lectures");
-        list = localLec ? JSON.parse(localLec) : school.lectures;
+        list = localLec ? JSON.parse(localLec) : [];
       }
 
       setAllLectures(list);
@@ -372,6 +372,68 @@ export default function Today() {
       }
 
       const device = await getDeviceInfo();
+      const deviceModelName = device.browser || "Web Client";
+      let knownDevice = false;
+
+      try {
+        // Query the database for existing registered devices for this student
+        const { data: dbDevices, error: deviceFetchError } = await supabase
+          .from("devices")
+          .select("*")
+          .eq("student_id", student.id);
+
+        if (deviceFetchError) throw deviceFetchError;
+
+        if (!dbDevices || dbDevices.length === 0) {
+          // First registered device is auto-approved
+          const firstDevice = {
+            id: "dev_" + Date.now().toString().slice(-6),
+            student_id: student.id,
+            student: student.name,
+            class: student.className || student.class || "10-A",
+            device: deviceModelName,
+            status: "Approved",
+            date: new Date().toLocaleDateString()
+          };
+
+          await supabase.from("devices").insert([firstDevice]);
+
+          // Sync local storage for offline fallback compatibility
+          const localApprovedRaw = localStorage.getItem("local_approved_devices");
+          const localApproved = localApprovedRaw ? JSON.parse(localApprovedRaw) : [];
+          localStorage.setItem("local_approved_devices", JSON.stringify([firstDevice, ...localApproved]));
+
+          knownDevice = true;
+        } else {
+          // Check if this device is approved
+          const isApproved = dbDevices.some(d => d.status === "Approved" && d.device === deviceModelName);
+          if (isApproved) {
+            knownDevice = true;
+          } else {
+            // Unapproved device check-in - file a pending registration if not already filed
+            const isPending = dbDevices.some(d => d.status === "Pending" && d.device === deviceModelName);
+            if (!isPending) {
+              const pendingDevice = {
+                id: "dev_" + Date.now().toString().slice(-6),
+                student_id: student.id,
+                student: student.name,
+                class: student.className || student.class || "10-A",
+                device: deviceModelName,
+                status: "Pending",
+                date: new Date().toLocaleDateString()
+              };
+              await supabase.from("devices").insert([pendingDevice]);
+            }
+            knownDevice = false;
+          }
+        }
+      } catch (err: any) {
+        console.warn("Supabase device lookup failed, falling back to local memory:", err.message);
+        const localApprovedRaw = localStorage.getItem("local_approved_devices");
+        const localApproved = localApprovedRaw ? JSON.parse(localApprovedRaw) : [];
+        knownDevice = localApproved.some((d: any) => d.student === student.name && d.device.includes(deviceModelName));
+      }
+
       let photoOk = false;
       let photoBase64 = "";
       try {
@@ -385,7 +447,7 @@ export default function Today() {
       }
 
       const score = trustScore({
-        knownDevice: true,
+        knownDevice,
         gpsOk,
         photoOk,
         browserOk: true
