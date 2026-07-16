@@ -45,13 +45,17 @@ CREATE TABLE IF NOT EXISTS students (
 
 -- 5. LECTURES
 CREATE TABLE IF NOT EXISTS lectures (
-  id           TEXT PRIMARY KEY,
-  number       INTEGER NOT NULL,
-  subject      TEXT,
-  start        TEXT NOT NULL,
-  "end"        TEXT NOT NULL,
-  "meetLink"   TEXT,
-  created_at   TIMESTAMPTZ DEFAULT NOW()
+  id                  TEXT PRIMARY KEY,
+  number              INTEGER NOT NULL,
+  subject             TEXT,
+  start               TEXT NOT NULL,
+  "end"               TEXT NOT NULL,
+  "meetLink"          TEXT,
+  teacher             TEXT,
+  "subjectSecondary"  TEXT,
+  "teacherSecondary"  TEXT,
+  "meetLinkSecondary" TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 6. ATTENDANCE RECORDS
@@ -158,3 +162,9 @@ INSERT INTO admin_credentials (username, password) VALUES
 ON CONFLICT (username) DO NOTHING;
 
 SELECT 'Spirit Attendance DB ready! 9 tables created.' AS status;
+
+-- UPGRADE / SCHEMAS UPDATES
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS "teacher" TEXT;
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS "subjectSecondary" TEXT;
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS "teacherSecondary" TEXT;
+ALTER TABLE lectures ADD COLUMN IF NOT EXISTS "meetLinkSecondary" TEXT;

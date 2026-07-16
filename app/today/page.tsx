@@ -18,6 +18,13 @@ export default function Today() {
   const [allLectures, setAllLectures] = useState<any[]>([]);
   const [activeLecture, setActiveLecture] = useState<any>(null);
   const [isPastCheckinLimit, setIsPastCheckinLimit] = useState(false);
+  const [chosenSubject, setChosenSubject] = useState<string>("");
+
+  useEffect(() => {
+    if (activeLecture && !chosenSubject) {
+      setChosenSubject(activeLecture.subject || "");
+    }
+  }, [activeLecture, chosenSubject]);
 
   // Secret Code login state (roll number removed — code-only login)
   const [secretCode, setSecretCode] = useState("");
@@ -152,20 +159,35 @@ export default function Today() {
     });
   };
 
-  // Resolve Teacher Name for Ongoing Lecture
-  const activeTeacherName = useMemo(() => {
-    if (!activeLecture) return "Sir Ali Raza";
+  // Resolve Subject, Teacher Name, and Meet Link for Ongoing Lecture
+  const resolvedActiveLecture = useMemo(() => {
+    if (!activeLecture) return null;
 
-    // Cross-reference database teacher subjects
-    const teacherMatch = teachers.find(t => {
-      const localSub = localStorage.getItem("local_subjects");
-      const subjectsList = localSub ? JSON.parse(localSub) : [];
-      const sub = subjectsList.find((s: any) => s.id === t.subjectId);
-      return sub && sub.name.toLowerCase() === activeLecture.subject.toLowerCase();
-    });
+    const isSecondary = activeLecture.subjectSecondary && 
+                        chosenSubject.toLowerCase() === activeLecture.subjectSecondary.toLowerCase();
 
-    return teacherMatch ? teacherMatch.name : "Sir Ali Raza";
-  }, [activeLecture, teachers]);
+    const subject = isSecondary ? activeLecture.subjectSecondary : activeLecture.subject;
+    const meetLink = isSecondary ? activeLecture.meetLinkSecondary : activeLecture.meetLink;
+    
+    // Resolve teacher
+    let teacher = isSecondary ? activeLecture.teacherSecondary : activeLecture.teacher;
+    if (!teacher) {
+      // Fallback to cross-referencing subject
+      const teacherMatch = teachers.find(t => {
+        const localSub = localStorage.getItem("local_subjects");
+        const subjectsList = localSub ? JSON.parse(localSub) : [];
+        const sub = subjectsList.find((s: any) => s.id === t.subjectId);
+        return sub && sub.name.toLowerCase() === subject.toLowerCase();
+      });
+      teacher = teacherMatch ? teacherMatch.name : "Sir Ali Raza";
+    }
+
+    return {
+      subject,
+      teacher,
+      meetLink
+    };
+  }, [activeLecture, chosenSubject, teachers]);
 
   const requestPermissions = async () => {
     setBusy(true);
@@ -458,7 +480,7 @@ export default function Today() {
         student_name: student.name,
         class_name: student.className || student.class || "10-A",
         lecture_number: activeLecture.number,
-        subject: activeLecture.subject || "Science",
+        subject: resolvedActiveLecture?.subject || activeLecture.subject || "Science",
         date: todayKey(),
         status: "Present",
         trust_score: `${score}%`,
@@ -483,7 +505,7 @@ export default function Today() {
       setMsg(`🎉 Congratulations! Attendance successfully logged for Lecture ${activeLecture.number}. Safety Trust Index: ${score}%. Redirecting to Google Meet in 5 seconds...`);
 
       setTimeout(() => {
-        window.location.href = activeLecture.meetLink;
+        window.location.href = resolvedActiveLecture?.meetLink || activeLecture.meetLink;
       }, 5000);
     } catch (e: any) {
       setMsg(e.message || "Attendance logging failed.");
@@ -670,15 +692,56 @@ export default function Today() {
 
               {/* Ongoing Lecture Schedule detail with Instructor Name */}
               {activeLecture ? (
-                <div className="rounded-2xl border p-5 bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/40 space-y-3">
-                  <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 border-b dark:border-blue-900/30 pb-2">
-                    <Clock size={16} /> Ongoing Scheduled Lecture
-                  </h4>
-                  <div className="text-sm grid grid-cols-2 gap-3 text-neutral-600 dark:text-white/70 leading-relaxed">
-                    <p>Course Subject: <span className="font-semibold text-neutral-900 dark:text-white">{activeLecture.subject || "Science"}</span></p>
-                    <p>Instructor: <span className="font-semibold text-neutral-900 dark:text-white">{activeTeacherName}</span></p>
-                    <p>Start Time: <span className="font-semibold font-mono text-neutral-900 dark:text-white">{activeLecture.start} AM</span></p>
-                    <p>End Time: <span className="font-semibold font-mono text-neutral-900 dark:text-white">{activeLecture.end} AM</span></p>
+                <div className="space-y-4">
+                  {/* Subject Selector for Parallel Sessions */}
+                  {activeLecture.subjectSecondary && (
+                    <div className="rounded-2xl border p-5 bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 space-y-3">
+                      <h4 className="text-sm font-bold flex items-center gap-1.5 border-b dark:border-neutral-800 pb-2">
+                        Which course are you attending today?
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3.5">
+                        <button
+                          type="button"
+                          onClick={() => setChosenSubject(activeLecture.subject)}
+                          className={`p-4 rounded-xl border-2 text-left transition-all ${
+                            chosenSubject.toLowerCase() === activeLecture.subject.toLowerCase()
+                              ? "border-blue-650 bg-blue-50/50 dark:bg-blue-950/20 text-blue-705 dark:text-blue-300 font-bold"
+                              : "border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
+                          }`}
+                        >
+                          <div className="text-sm font-extrabold">{activeLecture.subject}</div>
+                          <div className="text-xs font-normal opacity-75 mt-1">
+                            Instructor: {activeLecture.teacher || "Sir Ali Raza"}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setChosenSubject(activeLecture.subjectSecondary)}
+                          className={`p-4 rounded-xl border-2 text-left transition-all ${
+                            chosenSubject.toLowerCase() === activeLecture.subjectSecondary.toLowerCase()
+                              ? "border-blue-650 bg-blue-50/50 dark:bg-blue-950/20 text-blue-705 dark:text-blue-300 font-bold"
+                              : "border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100/50 dark:hover:bg-neutral-800/50"
+                          }`}
+                        >
+                          <div className="text-sm font-extrabold">{activeLecture.subjectSecondary}</div>
+                          <div className="text-xs font-normal opacity-75 mt-1">
+                            Instructor: {activeLecture.teacherSecondary || "Sir Bilal Ahmed"}
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="rounded-2xl border p-5 bg-blue-50/50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900/40 space-y-3">
+                    <h4 className="text-sm font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5 border-b dark:border-blue-900/30 pb-2">
+                      <Clock size={16} /> Ongoing Scheduled Lecture
+                    </h4>
+                    <div className="text-sm grid grid-cols-2 gap-3 text-neutral-600 dark:text-white/70 leading-relaxed font-sans">
+                      <p>Course Subject: <span className="font-semibold text-neutral-900 dark:text-white">{resolvedActiveLecture?.subject || activeLecture.subject}</span></p>
+                      <p>Instructor: <span className="font-semibold text-neutral-900 dark:text-white">{resolvedActiveLecture?.teacher}</span></p>
+                      <p>Start Time: <span className="font-semibold font-mono text-neutral-900 dark:text-white">{activeLecture.start} AM</span></p>
+                      <p>End Time: <span className="font-semibold font-mono text-neutral-900 dark:text-white">{activeLecture.end} AM</span></p>
+                    </div>
                   </div>
                 </div>
               ) : (

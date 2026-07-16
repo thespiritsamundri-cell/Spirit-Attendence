@@ -382,8 +382,8 @@ export default function Admin() {
     return `${hours12.toString().padStart(2, "0")}:${minutes} ${ampm}`;
   };
 
-  const [lectureForm, setLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "" });
-  const [editLectureForm, setEditLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "" });
+  const [lectureForm, setLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "" });
+  const [editLectureForm, setEditLectureForm] = useState({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "" });
   const [notificationForm, setNotificationForm] = useState({ title: "", message: "", targetClass: "All Classes" });
 
   // School Information Settings
@@ -964,7 +964,11 @@ export default function Admin() {
       subject: lectureForm.subject,
       start: lectureForm.start,
       end: lectureForm.end,
-      meetLink: lectureForm.meetLink
+      meetLink: lectureForm.meetLink,
+      teacher: lectureForm.teacher || null,
+      subjectSecondary: lectureForm.subjectSecondary || null,
+      teacherSecondary: lectureForm.teacherSecondary || null,
+      meetLinkSecondary: lectureForm.meetLinkSecondary || null
     };
 
     try {
@@ -977,7 +981,7 @@ export default function Admin() {
     const updated = [...lectures, newLecture];
     setLectures(updated);
     localStorage.setItem("local_lectures", JSON.stringify(updated));
-    setLectureForm({ number: 1, subject: "", start: "", end: "", meetLink: "" });
+    setLectureForm({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "" });
     setShowAddLecture(false);
   };
 
@@ -991,7 +995,11 @@ export default function Admin() {
       subject: editLectureForm.subject,
       start: editLectureForm.start,
       end: editLectureForm.end,
-      meetLink: editLectureForm.meetLink
+      meetLink: editLectureForm.meetLink,
+      teacher: editLectureForm.teacher || null,
+      subjectSecondary: editLectureForm.subjectSecondary || null,
+      teacherSecondary: editLectureForm.teacherSecondary || null,
+      meetLinkSecondary: editLectureForm.meetLinkSecondary || null
     };
 
     try {
@@ -1309,23 +1317,41 @@ export default function Admin() {
       const totalStudents = classStudents.length;
 
       const lectureStats = sortedLectures.map((lec) => {
-        const presentStudentIds = new Set<string>();
+        const primaryPresents = new Set<string>();
+        const secondaryPresents = new Set<string>();
 
         attendanceLogs.forEach((log) => {
-          if (log.date === targetDate && log.lecture_number === lec.number && log.status === "Present") {
+          if (log.date === targetDate && log.lecture_number === lec.number && log.status === "Present" && log.subject) {
             const logClass = (log.class_name || log.class || "").toLowerCase();
             const matchesClass = logClass === fullClassName.toLowerCase() || logClass === cls.name.toLowerCase();
             
             if (matchesClass) {
-              if (log.student_id) {
-                const belongsToClass = classStudents.some((s) => s.id === log.student_id);
-                if (belongsToClass) {
-                  presentStudentIds.add(log.student_id);
+              const isPrimary = !lec.subjectSecondary || log.subject.toLowerCase() === lec.subject.toLowerCase();
+              const isSecondary = lec.subjectSecondary && log.subject.toLowerCase() === lec.subjectSecondary.toLowerCase();
+
+              if (isPrimary) {
+                if (log.student_id) {
+                  const belongsToClass = classStudents.some((s) => s.id === log.student_id);
+                  if (belongsToClass) {
+                    primaryPresents.add(log.student_id);
+                  }
+                } else if (log.student_name) {
+                  const matchedStudent = classStudents.find((s) => s.name === log.student_name);
+                  if (matchedStudent) {
+                    primaryPresents.add(matchedStudent.id);
+                  }
                 }
-              } else if (log.student_name) {
-                const matchedStudent = classStudents.find((s) => s.name === log.student_name);
-                if (matchedStudent) {
-                  presentStudentIds.add(matchedStudent.id);
+              } else if (isSecondary) {
+                if (log.student_id) {
+                  const belongsToClass = classStudents.some((s) => s.id === log.student_id);
+                  if (belongsToClass) {
+                    secondaryPresents.add(log.student_id);
+                  }
+                } else if (log.student_name) {
+                  const matchedStudent = classStudents.find((s) => s.name === log.student_name);
+                  if (matchedStudent) {
+                    secondaryPresents.add(matchedStudent.id);
+                  }
                 }
               }
             }
@@ -1334,7 +1360,10 @@ export default function Admin() {
 
         return {
           lectureNumber: lec.number,
-          presents: presentStudentIds.size,
+          subject: lec.subject,
+          presents: primaryPresents.size,
+          subjectSecondary: lec.subjectSecondary,
+          presentsSecondary: secondaryPresents.size,
           total: totalStudents,
         };
       });
@@ -1554,6 +1583,7 @@ export default function Admin() {
                                 Lec {lec.number}
                                 <span className="block text-[9px] text-neutral-400 normal-case font-mono mt-0.5">
                                   {lec.subject}
+                                  {lec.subjectSecondary && <span className="block text-[8px] text-indigo-500 font-semibold">{lec.subjectSecondary}</span>}
                                 </span>
                               </th>
                             ))
@@ -1569,32 +1599,41 @@ export default function Admin() {
                         </tr>
                       ) : (
                         lectureMatrixToday.map((row) => (
-                          <tr key={row.classId} className="border-b dark:border-neutral-850 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/10 transition-colors">
+                          <tr key={row.classId} className="border-b dark:border-neutral-855 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/10 transition-colors">
                             <td className="py-4 px-4 font-bold text-neutral-900 dark:text-white">
                               {row.className}
                             </td>
                             {row.lectures.map((lec, idx) => {
-                              const ratio = row.total > 0 ? lec.presents / row.total : 0;
-                              let badgeColor = "bg-neutral-100 dark:bg-neutral-800 text-neutral-500";
-                              if (lec.presents > 0) {
-                                if (ratio >= 0.9) {
-                                  badgeColor = "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50";
-                                } else if (ratio >= 0.5) {
-                                  badgeColor = "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50";
-                                } else {
-                                  badgeColor = "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50";
+                              const renderBadge = (presents: number, total: number, subjectName: string, isSec = false) => {
+                                const ratio = total > 0 ? presents / total : 0;
+                                let badgeColor = "bg-neutral-100 dark:bg-neutral-800 text-neutral-500";
+                                if (presents > 0) {
+                                  if (ratio >= 0.9) {
+                                    badgeColor = "bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-900/50";
+                                  } else if (ratio >= 0.5) {
+                                    badgeColor = "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50";
+                                  } else {
+                                    badgeColor = "bg-amber-100 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50";
+                                  }
+                                } else if (total > 0) {
+                                  badgeColor = isSec 
+                                    ? "bg-indigo-50/20 dark:bg-indigo-950/10 text-indigo-400 dark:text-indigo-500 border border-indigo-100/30 dark:border-indigo-950/30"
+                                    : "bg-red-50 dark:bg-red-950/20 text-red-650 dark:text-red-400 border border-red-100 dark:border-red-950/50";
                                 }
-                              } else if (row.total > 0) {
-                                badgeColor = "bg-red-550/10 dark:bg-red-950/20 text-red-600 dark:text-red-405 border border-red-100 dark:border-red-950/50";
-                              }
+                                return (
+                                  <span className={`inline-flex flex-col items-center justify-center min-w-[56px] py-1 px-2 rounded-xl font-bold text-[10px] shadow-sm ${badgeColor}`}>
+                                    <span className="font-semibold text-[8px] opacity-75">{subjectName}</span>
+                                    <span className="font-mono mt-0.5">{presents}/{total}</span>
+                                  </span>
+                                );
+                              };
+
                               return (
                                 <td key={idx} className="py-4 px-4 text-center">
-                                  <span className={`inline-flex flex-col items-center justify-center min-w-[56px] py-1 px-2.5 rounded-xl font-bold text-xs shadow-sm ${badgeColor}`}>
-                                    <span className="font-mono">{lec.presents} / {lec.total}</span>
-                                    <span className="text-[8px] opacity-75 font-normal tracking-wide mt-0.5">
-                                      {row.total > 0 ? `${Math.round(ratio * 100)}%` : "0%"}
-                                    </span>
-                                  </span>
+                                  <div className="flex flex-col gap-1.5 justify-center items-center">
+                                    {renderBadge(lec.presents, row.total, lec.subject || "Lec")}
+                                    {lec.subjectSecondary && renderBadge(lec.presentsSecondary, row.total, lec.subjectSecondary, true)}
+                                  </div>
                                 </td>
                               );
                             })}
@@ -2083,15 +2122,34 @@ export default function Admin() {
                   {lectures.map(l => (
                     <tr key={l.id} className="border-b dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                       <td className="py-3 px-4 font-bold">{l.number}</td>
-                      <td className="py-3 px-4 font-semibold">{l.subject || "No Subject Assigned"}</td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-neutral-900 dark:text-white">{l.subject || "No Subject Assigned"}</div>
+                        {l.teacher && <div className="text-xs text-neutral-450 dark:text-neutral-500 mt-0.5 font-medium">Instructor: {l.teacher}</div>}
+                        {l.subjectSecondary && (
+                          <div className="border-t border-neutral-100 dark:border-neutral-800 mt-1.5 pt-1.5">
+                            <div className="font-semibold text-indigo-650 dark:text-indigo-400 flex items-center gap-1.5">
+                              {l.subjectSecondary}
+                              <span className="text-[8px] tracking-wider uppercase font-extrabold bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300 px-1.5 py-0.5 rounded shadow-sm">Parallel</span>
+                            </div>
+                            {l.teacherSecondary && <div className="text-xs text-neutral-450 dark:text-neutral-500 mt-0.5 font-medium">Instructor: {l.teacherSecondary}</div>}
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3 px-4 font-mono">{formatTime12h(l.start)}</td>
                       <td className="py-3 px-4 font-mono">{formatTime12h(l.end)}</td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 space-y-1.5">
                         {l.meetLink ? (
-                          <a href={l.meetLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline truncate max-w-[200px] block font-mono">
-                            {l.meetLink}
+                          <a href={l.meetLink} target="_blank" rel="noreferrer" className="text-blue-650 dark:text-blue-400 hover:underline truncate max-w-[200px] block font-mono text-xs">
+                            Primary: {l.meetLink}
                           </a>
-                        ) : "N/A"}
+                        ) : <div className="text-neutral-450 text-xs">Primary: N/A</div>}
+                        {l.subjectSecondary && (
+                          l.meetLinkSecondary ? (
+                            <a href={l.meetLinkSecondary} target="_blank" rel="noreferrer" className="text-indigo-600 dark:text-indigo-455 hover:underline truncate max-w-[200px] block font-mono text-xs">
+                              Secondary: {l.meetLinkSecondary}
+                            </a>
+                          ) : <div className="text-neutral-450 text-xs">Secondary: N/A</div>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-right flex justify-end gap-3 items-center">
                         <button
@@ -2103,7 +2161,17 @@ export default function Admin() {
                         </button>
                         <button
                           onClick={() => {
-                            setEditLectureForm({ number: l.number, subject: l.subject || "", start: l.start, end: l.end, meetLink: l.meetLink || "" });
+                            setEditLectureForm({
+                              number: l.number,
+                              subject: l.subject || "",
+                              start: l.start,
+                              end: l.end,
+                              meetLink: l.meetLink || "",
+                              teacher: l.teacher || "",
+                              subjectSecondary: l.subjectSecondary || "",
+                              teacherSecondary: l.teacherSecondary || "",
+                              meetLinkSecondary: l.meetLinkSecondary || ""
+                            });
                             setShowEditLecture(l);
                           }}
                           className="text-blue-500 hover:text-blue-700"
@@ -3260,7 +3328,7 @@ export default function Admin() {
       {/* Add Lecture Modal */}
       {showAddLecture && (
         <Modal title="Schedule Lecture Window" onClose={() => setShowAddLecture(false)}>
-          <form onSubmit={addLecture} className="space-y-4">
+          <form onSubmit={addLecture} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase text-neutral-400">Lecture Number</label>
@@ -3277,17 +3345,52 @@ export default function Admin() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase text-neutral-400">Start Time</label>
-                <input required type="time" value={lectureForm.start} onChange={e => setLectureForm({ ...lectureForm, start: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-500 dark:border-neutral-800" />
+                <input required type="time" value={lectureForm.start} onChange={e => setLectureForm({ ...lectureForm, start: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
               </div>
               <div>
                 <label className="text-xs font-bold uppercase text-neutral-400">End Time</label>
                 <input required type="time" value={lectureForm.end} onChange={e => setLectureForm({ ...lectureForm, end: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
               </div>
             </div>
-            <div>
-              <label className="text-xs font-bold uppercase text-neutral-400">Google Meet Link</label>
-              <input required type="url" placeholder="https://meet.google.com/abc-defg-hij" value={lectureForm.meetLink} onChange={e => setLectureForm({ ...lectureForm, meetLink: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Google Meet Link</label>
+                <input required type="url" placeholder="https://meet.google.com/abc-defg-hij" value={lectureForm.meetLink} onChange={e => setLectureForm({ ...lectureForm, meetLink: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Primary Instructor</label>
+                <select value={lectureForm.teacher || ""} onChange={e => setLectureForm({ ...lectureForm, teacher: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800">
+                  <option value="">-- Choose Instructor --</option>
+                  {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                </select>
+              </div>
             </div>
+
+            {/* Optional Secondary Lecture Section */}
+            <div className="border-t dark:border-neutral-800 pt-4 mt-2 space-y-4">
+              <h4 className="text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider">Parallel Session (Optional)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Subject</label>
+                  <select value={lectureForm.subjectSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, subjectSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
+                    <option value="">-- Choose Secondary Subject --</option>
+                    {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Instructor</label>
+                  <select value={lectureForm.teacherSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, teacherSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
+                    <option value="">-- Choose Secondary Instructor --</option>
+                    {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Secondary Meet Link</label>
+                <input type="url" placeholder="https://meet.google.com/xyz-pdqr-lmn" value={lectureForm.meetLinkSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, meetLinkSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800" />
+              </div>
+            </div>
+
             <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Lecture Period</button>
           </form>
         </Modal>
@@ -3296,7 +3399,7 @@ export default function Admin() {
       {/* Edit Lecture Modal */}
       {showEditLecture && (
         <Modal title={`Edit Lecture Window #${showEditLecture.number}`} onClose={() => setShowEditLecture(null)}>
-          <form onSubmit={updateLecture} className="space-y-4">
+          <form onSubmit={updateLecture} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-bold uppercase text-neutral-400">Lecture Number</label>
@@ -3320,10 +3423,45 @@ export default function Admin() {
                 <input required type="time" value={editLectureForm.end} onChange={e => setEditLectureForm({ ...editLectureForm, end: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 font-mono outline-blue-550 dark:border-neutral-800" />
               </div>
             </div>
-            <div>
-              <label className="text-xs font-bold uppercase text-neutral-400">Google Meet Link</label>
-              <input required type="url" placeholder="https://meet.google.com/abc-defg-hij" value={editLectureForm.meetLink} onChange={e => setEditLectureForm({ ...editLectureForm, meetLink: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Google Meet Link</label>
+                <input required type="url" placeholder="https://meet.google.com/abc-defg-hij" value={editLectureForm.meetLink} onChange={e => setEditLectureForm({ ...editLectureForm, meetLink: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800" />
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Primary Instructor</label>
+                <select value={editLectureForm.teacher || ""} onChange={e => setEditLectureForm({ ...editLectureForm, teacher: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-550 dark:border-neutral-800">
+                  <option value="">-- Choose Instructor --</option>
+                  {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                </select>
+              </div>
             </div>
+
+            {/* Optional Secondary Lecture Section */}
+            <div className="border-t dark:border-neutral-800 pt-4 mt-2 space-y-4">
+              <h4 className="text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider">Parallel Session (Optional)</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Subject</label>
+                  <select value={editLectureForm.subjectSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, subjectSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
+                    <option value="">-- Choose Secondary Subject --</option>
+                    {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Instructor</label>
+                  <select value={editLectureForm.teacherSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, teacherSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
+                    <option value="">-- Choose Secondary Instructor --</option>
+                    {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold uppercase text-neutral-400">Secondary Meet Link</label>
+                <input type="url" placeholder="https://meet.google.com/xyz-pdqr-lmn" value={editLectureForm.meetLinkSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, meetLinkSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800" />
+              </div>
+            </div>
+
             <div className="flex items-center gap-2.5 py-1">
               <input 
                 type="checkbox" 

@@ -60,13 +60,17 @@ CREATE TABLE IF NOT EXISTS students (
 
 -- 5. Lecture schedule windows
 CREATE TABLE IF NOT EXISTS lectures (
-  id          TEXT PRIMARY KEY,
-  number      INTEGER NOT NULL,
-  subject     TEXT,
-  start       TEXT NOT NULL,
-  "end"       TEXT NOT NULL,
-  "meetLink"  TEXT,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+  id                  TEXT PRIMARY KEY,
+  number              INTEGER NOT NULL,
+  subject             TEXT,
+  start               TEXT NOT NULL,
+  "end"               TEXT NOT NULL,
+  "meetLink"          TEXT,
+  teacher             TEXT,
+  "subjectSecondary"  TEXT,
+  "teacherSecondary"  TEXT,
+  "meetLinkSecondary" TEXT,
+  created_at          TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 6. Attendance records (one row per student per lecture check-in)
