@@ -19,6 +19,9 @@ export default function Today() {
   const [activeLecture, setActiveLecture] = useState<any>(null);
   const [isPastCheckinLimit, setIsPastCheckinLimit] = useState(false);
   const [chosenSubject, setChosenSubject] = useState<string>("");
+  // Secret Code login state (roll number removed — code-only login)
+  const [secretCode, setSecretCode] = useState("");
+  const [student, setStudent] = useState<any>(null);
 
   useEffect(() => {
     if (activeLecture && !chosenSubject) {
@@ -33,10 +36,6 @@ export default function Today() {
     const active = getActiveLecture(filtered.length > 0 ? filtered : allLectures);
     setActiveLecture(active);
   }, [student, allLectures]);
-
-  // Secret Code login state (roll number removed — code-only login)
-  const [secretCode, setSecretCode] = useState("");
-  const [student, setStudent] = useState<any>(null);
 
   // Student Profile Editing State
   const [showEditProfile, setShowEditProfile] = useState(false);
