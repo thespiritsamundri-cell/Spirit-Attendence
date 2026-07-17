@@ -61,16 +61,6 @@ export default function Today() {
     const isDark = document.documentElement.classList.contains("dark");
     setTheme(isDark ? "dark" : "light");
 
-    // Register Service Worker
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("/sw.js").then(
-          (reg) => console.log("SW registered:", reg.scope),
-          (err) => console.error("SW registration failed:", err)
-        );
-      });
-    }
-
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);

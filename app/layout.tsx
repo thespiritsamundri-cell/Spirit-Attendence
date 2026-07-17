@@ -27,6 +27,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             `
           }}
         />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+                window.addEventListener('load', function() {
+                  navigator.serviceWorker.register('/sw.js').then(
+                    function(reg) { console.log('SW registered globally:', reg.scope); },
+                    function(err) { console.error('SW registration failed:', err); }
+                  );
+                });
+              }
+            `
+          }}
+        />
       </head>
       <body suppressHydrationWarning>{children}</body>
     </html>
