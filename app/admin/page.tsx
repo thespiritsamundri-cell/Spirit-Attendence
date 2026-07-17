@@ -106,6 +106,8 @@ export default function Admin() {
   const [theme, setTheme] = useState("light");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [applyLinkToAll, setApplyLinkToAll] = useState<boolean>(false);
+  const [showParallelAdd, setShowParallelAdd] = useState(false);
+  const [showParallelEdit, setShowParallelEdit] = useState(false);
 
   // Dynamic Database States
   const [classes, setClasses] = useState<any[]>([]);
@@ -1034,9 +1036,9 @@ export default function Admin() {
       end: lectureForm.end,
       meetLink: lectureForm.meetLink,
       teacher: lectureForm.teacher || null,
-      subjectSecondary: lectureForm.subjectSecondary || null,
-      teacherSecondary: lectureForm.teacherSecondary || null,
-      meetLinkSecondary: lectureForm.meetLinkSecondary || null,
+      subjectSecondary: showParallelAdd ? (lectureForm.subjectSecondary || null) : null,
+      teacherSecondary: showParallelAdd ? (lectureForm.teacherSecondary || null) : null,
+      meetLinkSecondary: showParallelAdd ? (lectureForm.meetLinkSecondary || null) : null,
       classId: lectureForm.classId || null
     };
 
@@ -1051,6 +1053,7 @@ export default function Admin() {
     setLectures(updated);
     localStorage.setItem("local_lectures", JSON.stringify(updated));
     setLectureForm({ number: 1, subject: "", start: "", end: "", meetLink: "", teacher: "", subjectSecondary: "", teacherSecondary: "", meetLinkSecondary: "", classId: "" });
+    setShowParallelAdd(false);
     setShowAddLecture(false);
   };
 
@@ -1066,9 +1069,9 @@ export default function Admin() {
       end: editLectureForm.end,
       meetLink: editLectureForm.meetLink,
       teacher: editLectureForm.teacher || null,
-      subjectSecondary: editLectureForm.subjectSecondary || null,
-      teacherSecondary: editLectureForm.teacherSecondary || null,
-      meetLinkSecondary: editLectureForm.meetLinkSecondary || null,
+      subjectSecondary: showParallelEdit ? (editLectureForm.subjectSecondary || null) : null,
+      teacherSecondary: showParallelEdit ? (editLectureForm.teacherSecondary || null) : null,
+      meetLinkSecondary: showParallelEdit ? (editLectureForm.meetLinkSecondary || null) : null,
       classId: editLectureForm.classId || null
     };
 
@@ -1100,6 +1103,7 @@ export default function Admin() {
     setLectures(updatedList);
     localStorage.setItem("local_lectures", JSON.stringify(updatedList));
     setShowEditLecture(null);
+    setShowParallelEdit(false);
     setApplyLinkToAll(false);
   };
 
@@ -2369,6 +2373,7 @@ export default function Admin() {
                               meetLinkSecondary: l.meetLinkSecondary || "",
                               classId: l.classId || ""
                             });
+                            setShowParallelEdit(!!l.subjectSecondary);
                             setShowEditLecture(l);
                           }}
                           className="text-blue-500 hover:text-blue-700"
@@ -3631,7 +3636,7 @@ export default function Admin() {
 
       {/* Add Lecture Modal */}
       {showAddLecture && (
-        <Modal title="Schedule Lecture Window" onClose={() => setShowAddLecture(false)}>
+        <Modal title="Schedule Lecture Window" size="xl" onClose={() => { setShowAddLecture(false); setShowParallelAdd(false); }}>
           <form onSubmit={addLecture} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
             <div>
               <label className="text-xs font-bold uppercase text-neutral-400">Assign to Class</label>
@@ -3682,39 +3687,57 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* Optional Secondary Lecture Section */}
-            <div className="border-t dark:border-neutral-800 pt-4 mt-2 space-y-4">
-              <h4 className="text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider">Parallel Session (Optional)</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Subject</label>
-                  <select value={lectureForm.subjectSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, subjectSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
-                    <option value="">-- Choose Secondary Subject --</option>
-                    {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Instructor</label>
-                  <select value={lectureForm.teacherSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, teacherSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
-                    <option value="">-- Choose Secondary Instructor --</option>
-                    {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Secondary Meet Link</label>
-                <input type="url" placeholder="https://meet.google.com/xyz-pdqr-lmn" value={lectureForm.meetLinkSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, meetLinkSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800" />
-              </div>
+            {/* Toggle Checkbox for Parallel Session */}
+            <div className="flex items-center gap-2.5 py-2 border-t dark:border-neutral-850 mt-3 select-none">
+              <input 
+                type="checkbox" 
+                id="showParallelAdd"
+                checked={showParallelAdd} 
+                onChange={e => setShowParallelAdd(e.target.checked)} 
+                className="w-4 h-4 rounded border-neutral-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+              />
+              <label htmlFor="showParallelAdd" className="text-xs font-bold text-neutral-600 dark:text-neutral-300 cursor-pointer uppercase tracking-wider">
+                Enable Parallel / Optional Lecture Session
+              </label>
             </div>
+
+            {/* Optional Secondary Lecture Section */}
+            {showParallelAdd && (
+              <div className="rounded-2xl border border-indigo-100 dark:border-indigo-950 bg-indigo-50/20 dark:bg-indigo-950/10 p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="flex justify-between items-center border-b dark:border-neutral-800 pb-2 mb-1">
+                  <h4 className="text-xs font-bold text-indigo-650 dark:text-indigo-400 uppercase tracking-wider">Parallel Session Config</h4>
+                  <span className="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full">Optional</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-500">Secondary Subject</label>
+                    <select value={lectureForm.subjectSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, subjectSecondary: e.target.value })} className="w-full mt-1.5 rounded-xl border bg-white dark:bg-neutral-950 p-3 outline-indigo-500 dark:border-neutral-800 text-sm">
+                      <option value="">-- Choose Secondary Subject --</option>
+                      {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-500">Secondary Instructor</label>
+                    <select value={lectureForm.teacherSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, teacherSecondary: e.target.value })} className="w-full mt-1.5 rounded-xl border bg-white dark:bg-neutral-950 p-3 outline-indigo-500 dark:border-neutral-800 text-sm">
+                      <option value="">-- Choose Secondary Instructor --</option>
+                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500">Secondary Meet Link</label>
+                  <input type="url" placeholder="https://meet.google.com/xyz-pdqr-lmn" value={lectureForm.meetLinkSecondary || ""} onChange={e => setLectureForm({ ...lectureForm, meetLinkSecondary: e.target.value })} className="w-full mt-1.5 rounded-xl border bg-white dark:bg-neutral-950 p-3 outline-indigo-500 dark:border-neutral-800 text-sm" />
+                </div>
+              </div>
+            )}
 
             <button type="submit" className="w-full bg-blue-600 text-white rounded-xl py-3 font-semibold hover:bg-blue-700">Save Lecture Period</button>
           </form>
         </Modal>
       )}
 
-      {/* Edit Lecture Modal */}
       {showEditLecture && (
-        <Modal title={`Edit Lecture Window #${showEditLecture.number}`} onClose={() => setShowEditLecture(null)}>
+        <Modal title={`Edit Lecture Window #${showEditLecture.number}`} size="xl" onClose={() => { setShowEditLecture(null); setShowParallelEdit(false); }}>
           <form onSubmit={updateLecture} className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
             <div>
               <label className="text-xs font-bold uppercase text-neutral-400">Assign to Class</label>
@@ -3765,30 +3788,49 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* Optional Secondary Lecture Section */}
-            <div className="border-t dark:border-neutral-800 pt-4 mt-2 space-y-4">
-              <h4 className="text-xs font-bold text-neutral-450 dark:text-neutral-400 uppercase tracking-wider">Parallel Session (Optional)</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Subject</label>
-                  <select value={editLectureForm.subjectSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, subjectSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
-                    <option value="">-- Choose Secondary Subject --</option>
-                    {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold uppercase text-neutral-400">Secondary Instructor</label>
-                  <select value={editLectureForm.teacherSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, teacherSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800">
-                    <option value="">-- Choose Secondary Instructor --</option>
-                    {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-bold uppercase text-neutral-400">Secondary Meet Link</label>
-                <input type="url" placeholder="https://meet.google.com/xyz-pdqr-lmn" value={editLectureForm.meetLinkSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, meetLinkSecondary: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-555 dark:border-neutral-800" />
-              </div>
+            {/* Toggle Checkbox for Parallel Session */}
+            <div className="flex items-center gap-2.5 py-2 border-t dark:border-neutral-850 mt-3 select-none">
+              <input 
+                type="checkbox" 
+                id="showParallelEdit"
+                checked={showParallelEdit} 
+                onChange={e => setShowParallelEdit(e.target.checked)} 
+                className="w-4 h-4 rounded border-neutral-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-500 accent-blue-600 cursor-pointer"
+              />
+              <label htmlFor="showParallelEdit" className="text-xs font-bold text-neutral-600 dark:text-neutral-300 cursor-pointer uppercase tracking-wider">
+                Enable Parallel / Optional Lecture Session
+              </label>
             </div>
+
+            {/* Optional Secondary Lecture Section */}
+            {showParallelEdit && (
+              <div className="rounded-2xl border border-indigo-100 dark:border-indigo-950 bg-indigo-50/20 dark:bg-indigo-950/10 p-4 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="flex justify-between items-center border-b dark:border-neutral-800 pb-2 mb-1">
+                  <h4 className="text-xs font-bold text-indigo-650 dark:text-indigo-400 uppercase tracking-wider">Parallel Session Config</h4>
+                  <span className="text-[9px] bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-full">Optional</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-500">Secondary Subject</label>
+                    <select value={editLectureForm.subjectSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, subjectSecondary: e.target.value })} className="w-full mt-1.5 rounded-xl border bg-white dark:bg-neutral-950 p-3 outline-indigo-500 dark:border-neutral-800 text-sm">
+                      <option value="">-- Choose Secondary Subject --</option>
+                      {subjects.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-500">Secondary Instructor</label>
+                    <select value={editLectureForm.teacherSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, teacherSecondary: e.target.value })} className="w-full mt-1.5 rounded-xl border bg-white dark:bg-neutral-950 p-3 outline-indigo-500 dark:border-neutral-800 text-sm">
+                      <option value="">-- Choose Secondary Instructor --</option>
+                      {teachers.map(t => <option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500">Secondary Meet Link</label>
+                  <input type="url" placeholder="https://meet.google.com/xyz-pdqr-lmn" value={editLectureForm.meetLinkSecondary || ""} onChange={e => setEditLectureForm({ ...editLectureForm, meetLinkSecondary: e.target.value })} className="w-full mt-1.5 rounded-xl border bg-white dark:bg-neutral-950 p-3 outline-indigo-500 dark:border-neutral-800 text-sm" />
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-2.5 py-1">
               <input 
@@ -4071,10 +4113,16 @@ function StatsCard({ label, value, icon: Icon, onClick }: any) {
 }
 
 // Modal Container Component
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function Modal({ title, children, onClose, size = "md" }: { title: string; children: React.ReactNode; onClose: () => void; size?: "md" | "lg" | "xl" | "2xl" }) {
+  const sizeClass = 
+    size === "2xl" ? "max-w-2xl" : 
+    size === "xl" ? "max-w-xl" : 
+    size === "lg" ? "max-w-lg" : 
+    "max-w-md";
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 backdrop-blur-sm p-4 text-neutral-900 dark:text-neutral-50">
-      <div className="glass w-full max-w-md rounded-3xl bg-white dark:bg-neutral-900 border border-white/20 p-6 shadow-2xl animate-in scale-in duration-200">
+      <div className={`glass w-full ${sizeClass} rounded-3xl bg-white dark:bg-neutral-900 border border-white/20 p-6 shadow-2xl animate-in scale-in duration-200`}>
         <div className="flex justify-between items-center border-b dark:border-neutral-800 pb-3 mb-4">
           <h3 className="font-extrabold text-lg">{title}</h3>
           <button onClick={onClose} className="rounded-full p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800">
