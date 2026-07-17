@@ -72,6 +72,23 @@ export default function Today() {
     const granted = localStorage.getItem("studentPermission") === "granted";
     setHasPermission(granted);
 
+    const fetchSchoolInfo = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("school_info")
+          .select("*")
+          .eq("id", "default")
+          .single();
+        if (!error && data) {
+          setCurrentSchool(data);
+          localStorage.setItem("local_school_info", JSON.stringify(data));
+        }
+      } catch (err) {
+        console.warn("Failed to fetch school_info from database, using local storage fallback");
+      }
+    };
+    fetchSchoolInfo();
+
     const localSchool = localStorage.getItem("local_school_info");
     if (localSchool) {
       try {

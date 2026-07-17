@@ -161,7 +161,35 @@ INSERT INTO admin_credentials (username, password) VALUES
   ('admin', 'spirit533')
 ON CONFLICT (username) DO NOTHING;
 
-SELECT 'Spirit Attendance DB ready! 9 tables created.' AS status;
+-- 10. SCHOOL INFORMATION CONFIGURATION
+CREATE TABLE IF NOT EXISTS school_info (
+  id              TEXT PRIMARY KEY DEFAULT 'default',
+  name            TEXT NOT NULL,
+  address         TEXT,
+  phone           TEXT,
+  website         TEXT,
+  email           TEXT,
+  "welcomeMessage" TEXT,
+  "themeColor"     TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE school_info DISABLE ROW LEVEL SECURITY;
+GRANT ALL ON school_info TO anon, authenticated;
+
+INSERT INTO school_info (id, name, address, phone, website, email, "welcomeMessage", "themeColor")
+VALUES (
+  'default',
+  'The Spirit School',
+  'Main Campus, Samundri',
+  '+92 300 0000000',
+  'https://school.example.com',
+  'info@school.example.com',
+  'السلام علیکم!\\nWelcome to The Spirit School\\nPlease verify your attendance carefully.',
+  '#2783DE'
+) ON CONFLICT (id) DO NOTHING;
+
+SELECT 'Spirit Attendance DB ready! 10 tables created.' AS status;
 
 -- UPGRADE / SCHEMAS UPDATES
 ALTER TABLE lectures ADD COLUMN IF NOT EXISTS "teacher" TEXT;

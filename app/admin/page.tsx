@@ -45,6 +45,7 @@ import {
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import * as XLSX from "xlsx";
+import { capturePhotoBlob } from "@/lib/attendance";
 
 // Initialize Supabase Client
 const supabase = createClient();
@@ -139,12 +140,62 @@ export default function Admin() {
   const [classForm, setClassForm] = useState({ name: "", section: "" });
   const [teacherForm, setTeacherForm] = useState({ name: "", subjectId: "" });
   const [subjectForm, setSubjectForm] = useState({ name: "" });
-  const [studentForm, setStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
+  const [studentForm, setStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "", profilePhoto: "" });
   const [showEditStudent, setShowEditStudent] = useState<any>(null);
-  const [editStudentForm, setEditStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
+  const [editStudentForm, setEditStudentForm] = useState({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "", profilePhoto: "" });
 
   const [showEditTeacher, setShowEditTeacher] = useState<any>(null);
   const [editTeacherForm, setEditTeacherForm] = useState({ name: "", subjectId: "" });
+
+  const [snappingPhoto, setSnappingPhoto] = useState(false);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, isEdit: boolean) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        if (isEdit) {
+          setEditStudentForm(prev => ({ ...prev, profilePhoto: base64 }));
+        } else {
+          setStudentForm(prev => ({ ...prev, profilePhoto: base64 }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSnapPhoto = async (isEdit: boolean) => {
+    setSnappingPhoto(true);
+    try {
+      const blob = await capturePhotoBlob();
+      if (blob && blob.size > 0) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const base64 = reader.result as string;
+          if (isEdit) {
+            setEditStudentForm(prev => ({ ...prev, profilePhoto: base64 }));
+          } else {
+            setStudentForm(prev => ({ ...prev, profilePhoto: base64 }));
+          }
+        };
+        reader.readAsDataURL(blob);
+      }
+    } catch (err: any) {
+      console.warn("Failed to snap profile picture:", err?.message);
+      alert("⚠️ Camera access failed or was denied.");
+    } finally {
+      setSnappingPhoto(false);
+    }
+  };
+
+  const handleDeletePhoto = (isEdit: boolean) => {
+    if (isEdit) {
+      setEditStudentForm(prev => ({ ...prev, profilePhoto: "" }));
+    } else {
+      setStudentForm(prev => ({ ...prev, profilePhoto: "" }));
+    }
+  };
   const [showEditSubject, setShowEditSubject] = useState<any>(null);
   const [editSubjectForm, setEditSubjectForm] = useState({ name: "" });
 
@@ -632,9 +683,21 @@ export default function Admin() {
       setNotifications(initialNotifs);
 
       // School Info Loading
-      const localSchool = localStorage.getItem("local_school_info");
-      if (localSchool) {
-        setSchoolInfo(JSON.parse(localSchool));
+      try {
+        const { data, error } = await supabase
+          .from("school_info")
+          .select("*")
+          .eq("id", "default")
+          .single();
+        if (error || !data) throw error || new Error("empty");
+        setSchoolInfo(data);
+        localStorage.setItem("local_school_info", JSON.stringify(data));
+      } catch (e) {
+        console.warn("Supabase school_info load failed, falling back to local storage.");
+        const localSchool = localStorage.getItem("local_school_info");
+        if (localSchool) {
+          setSchoolInfo(JSON.parse(localSchool));
+        }
       }
 
       // Attendance logs — load from Supabase first
@@ -900,7 +963,8 @@ export default function Admin() {
       rollNumber: finalRoll,
       code: finalCode,
       secretCode: finalCode,
-      attendance: "100%"
+      attendance: "100%",
+      profilePhoto: studentForm.profilePhoto || ""
     };
 
     try {
@@ -914,7 +978,7 @@ export default function Admin() {
     setStudents(updated);
     localStorage.setItem("local_students", JSON.stringify(updated));
     setAlerts(prev => [`New student "${newStudent.name}" registered with Roll No: ${finalRoll} and Secret Code: ${finalCode}`, ...prev]);
-    setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" });
+    setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "", profilePhoto: "" });
     setShowAddStudent(false);
   };
 
@@ -925,7 +989,8 @@ export default function Admin() {
       fatherName: student.fatherName || "",
       classId: student.classId || "",
       rollNumber: student.rollNumber || "",
-      secretCode: student.code || student.secretCode || ""
+      secretCode: student.code || student.secretCode || "",
+      profilePhoto: student.profilePhoto || student.profile_photo || ""
     });
   };
 
@@ -940,7 +1005,8 @@ export default function Admin() {
       classId: editStudentForm.classId,
       rollNumber: editStudentForm.rollNumber,
       code: editStudentForm.secretCode,
-      secretCode: editStudentForm.secretCode
+      secretCode: editStudentForm.secretCode,
+      profilePhoto: editStudentForm.profilePhoto || ""
     };
 
     try {
@@ -955,6 +1021,7 @@ export default function Admin() {
     localStorage.setItem("local_students", JSON.stringify(updated));
     setAlerts(prev => [`Student profile for "${updatedStudent.name}" updated successfully.`, ...prev]);
     setShowEditStudent(null);
+    setEditStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "", profilePhoto: "" });
   };
 
   const addLecture = async (e: React.FormEvent) => {
@@ -1053,11 +1120,21 @@ export default function Admin() {
     setAlerts(prev => [`Broadcast Announcement "${newNotif.title}" sent.`, ...prev]);
   };
 
-  const saveSchoolConfig = (e: React.FormEvent) => {
+  const saveSchoolConfig = async (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
-    setAlerts(prev => ["Branding configurations saved successfully.", ...prev]);
-    alert("✅ School Information configuration updated! Today Portal theme is synchronized.");
+    try {
+      const { error } = await supabase
+        .from("school_info")
+        .upsert({ id: "default", ...schoolInfo });
+      if (error) throw error;
+      localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
+      setAlerts(prev => ["Branding configurations saved successfully to database.", ...prev]);
+      alert("✅ School Information configuration updated! Today Portal theme is synchronized.");
+    } catch (err: any) {
+      console.error(err);
+      localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
+      alert("⚠️ Database save failed (ensure database migration was run). Local branding saved as fallback.");
+    }
   };
 
   const deleteItem = async (table: string, id: string, setter: any, localKey: string) => {
@@ -2115,7 +2192,18 @@ export default function Admin() {
                     return (
                       <tr key={s.id} className="border-b dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/30">
                         <td className="py-3 px-4 font-mono font-bold text-blue-600">{s.id}</td>
-                        <td className="py-3 px-4 font-semibold">{s.name}</td>
+                        <td className="py-3 px-4 font-semibold">
+                          <div className="flex items-center gap-2">
+                            {s.profilePhoto || s.profile_photo ? (
+                              <img src={s.profilePhoto || s.profile_photo} alt="Avatar" className="w-7 h-7 rounded-full object-cover border dark:border-neutral-800 animate-in fade-in duration-200" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xs border dark:border-neutral-850 shrink-0">
+                                {s.name ? s.name.charAt(0).toUpperCase() : "?"}
+                              </div>
+                            )}
+                            <span>{s.name}</span>
+                          </div>
+                        </td>
                         <td className="py-3 px-4">{s.fatherName}</td>
                         <td className="py-3 px-4">Class {studentClass ? `${studentClass.name}-${studentClass.section}` : "N/A"}</td>
                         <td className="py-3 px-4 font-mono">{s.rollNumber}</td>
@@ -3020,9 +3108,19 @@ export default function Admin() {
                 </div>
               </div>
               <button
-                onClick={() => {
-                  localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
-                  alert("Branding saved!");
+                onClick={async () => {
+                  try {
+                    const { error } = await supabase
+                      .from("school_info")
+                      .upsert({ id: "default", ...schoolInfo });
+                    if (error) throw error;
+                    localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
+                    alert("✅ Branding saved to database!");
+                  } catch (err) {
+                    console.error(err);
+                    localStorage.setItem("local_school_info", JSON.stringify(schoolInfo));
+                    alert("⚠️ Database save failed. Local branding saved as fallback.");
+                  }
                 }}
                 className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 flex gap-2 justify-center items-center transition-colors shadow-md text-sm"
               >
@@ -3311,8 +3409,56 @@ export default function Admin() {
 
       {/* Add Student Modal */}
       {showAddStudent && (
-        <Modal title="Register Student" onClose={() => { setShowAddStudent(false); setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" }); }}>
+        <Modal title="Register Student" onClose={() => { setShowAddStudent(false); setStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "", profilePhoto: "" }); }}>
           <form onSubmit={addStudent} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400 block mb-2">Profile Picture</label>
+              <div className="flex items-center gap-4 p-3 rounded-2xl border dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/20">
+                <div className="relative shrink-0">
+                  {studentForm.profilePhoto ? (
+                    <img src={studentForm.profilePhoto} alt="Profile Preview" className="w-16 h-16 rounded-full object-cover border-2 border-blue-500 shadow animate-in zoom-in-50 duration-200" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xl border dark:border-neutral-800">
+                      {studentForm.name ? studentForm.name.charAt(0).toUpperCase() : "?"}
+                    </div>
+                  )}
+                  {studentForm.profilePhoto && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhoto(false)}
+                      className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 shadow transition-colors"
+                      title="Remove Photo"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex gap-2">
+                    <label className="cursor-pointer bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 border dark:border-neutral-800 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors">
+                      <Upload size={14} />
+                      Upload Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, false)}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleSnapPhoto(false)}
+                      disabled={snappingPhoto}
+                      className="bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 border dark:border-neutral-800 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors"
+                    >
+                      <Camera size={14} />
+                      {snappingPhoto ? "Snapping..." : "Snap Camera"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-neutral-400">JPG or PNG format. Max size 2MB.</p>
+                </div>
+              </div>
+            </div>
             <div>
               <label className="text-xs font-bold uppercase text-neutral-400">Full Name</label>
               <input required type="text" placeholder="Ayan Ali" value={studentForm.name} onChange={e => setStudentForm({ ...studentForm, name: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />
@@ -3387,8 +3533,56 @@ export default function Admin() {
 
       {/* Edit Student Modal */}
       {showEditStudent && (
-        <Modal title="Edit Student Profile" onClose={() => { setShowEditStudent(null); setEditStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "" }); }}>
+        <Modal title="Edit Student Profile" onClose={() => { setShowEditStudent(null); setEditStudentForm({ name: "", fatherName: "", classId: "", rollNumber: "", secretCode: "", profilePhoto: "" }); }}>
           <form onSubmit={updateStudent} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold uppercase text-neutral-400 block mb-2">Profile Picture</label>
+              <div className="flex items-center gap-4 p-3 rounded-2xl border dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/20">
+                <div className="relative shrink-0">
+                  {editStudentForm.profilePhoto ? (
+                    <img src={editStudentForm.profilePhoto} alt="Profile Preview" className="w-16 h-16 rounded-full object-cover border-2 border-blue-500 shadow animate-in zoom-in-50 duration-200" />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-xl border dark:border-neutral-800">
+                      {editStudentForm.name ? editStudentForm.name.charAt(0).toUpperCase() : "?"}
+                    </div>
+                  )}
+                  {editStudentForm.profilePhoto && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePhoto(true)}
+                      className="absolute -top-1 -right-1 bg-red-600 hover:bg-red-700 text-white rounded-full p-1 shadow transition-colors"
+                      title="Remove Photo"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="flex gap-2">
+                    <label className="cursor-pointer bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 border dark:border-neutral-800 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors">
+                      <Upload size={14} />
+                      Upload Photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, true)}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleSnapPhoto(true)}
+                      disabled={snappingPhoto}
+                      className="bg-white hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800 border dark:border-neutral-800 rounded-xl px-3 py-1.5 text-xs font-semibold shadow-sm flex items-center gap-1.5 transition-colors"
+                    >
+                      <Camera size={14} />
+                      {snappingPhoto ? "Snapping..." : "Snap Camera"}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-neutral-400">JPG or PNG format. Max size 2MB.</p>
+                </div>
+              </div>
+            </div>
             <div>
               <label className="text-xs font-bold uppercase text-neutral-400">Full Name</label>
               <input required type="text" value={editStudentForm.name} onChange={e => setEditStudentForm({ ...editStudentForm, name: e.target.value })} className="w-full mt-1 rounded-xl border bg-neutral-50 dark:bg-neutral-950 p-3 outline-blue-500 dark:border-neutral-800" />

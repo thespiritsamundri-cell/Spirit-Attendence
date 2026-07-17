@@ -120,6 +120,19 @@ CREATE TABLE IF NOT EXISTS admin_credentials (
   password    TEXT NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 10. School Info
+CREATE TABLE IF NOT EXISTS school_info (
+  id              TEXT PRIMARY KEY DEFAULT 'default',
+  name            TEXT NOT NULL,
+  address         TEXT,
+  phone           TEXT,
+  website         TEXT,
+  email           TEXT,
+  "welcomeMessage" TEXT,
+  "themeColor"     TEXT,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
 `;
 
 // ─── RLS: disable for now so the app can read/write without auth ───────────
@@ -134,6 +147,7 @@ ALTER TABLE attendance  DISABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications DISABLE ROW LEVEL SECURITY;
 ALTER TABLE devices     DISABLE ROW LEVEL SECURITY;
 ALTER TABLE admin_credentials DISABLE ROW LEVEL SECURITY;
+ALTER TABLE school_info DISABLE ROW LEVEL SECURITY;
 `;
 
 // ─── Seed demo data ────────────────────────────────────────────────────────
@@ -261,6 +275,16 @@ async function main() {
   await upsert("students",  SEED_STUDENTS,  "students");
   await upsert("lectures",  SEED_LECTURES,  "lectures");
   await upsert("admin_credentials", [{ username: "admin", password: "admin123" }], "admin_credentials");
+  await upsert("school_info", [{
+    id: "default",
+    name: "The Spirit School",
+    address: "Main Campus, Samundri",
+    phone: "+92 300 0000000",
+    website: "https://school.example.com",
+    email: "info@school.example.com",
+    welcomeMessage: "السلام علیکم!\nWelcome to The Spirit School\nPlease verify your attendance carefully.",
+    themeColor: "#2783DE"
+  }], "school_info");
 
   console.log("\n✅ Database setup complete!\n");
   console.log("Demo student codes:");
