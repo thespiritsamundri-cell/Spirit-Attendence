@@ -40,7 +40,8 @@ import {
   Layers,
   CheckCircle2,
   XCircle,
-  Upload
+  Upload,
+  Menu
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
@@ -105,6 +106,7 @@ export default function Admin() {
   const [collapsedCategories, setCollapsedCategories] = useState<{ [key: string]: boolean }>({});
   const [theme, setTheme] = useState("light");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [applyLinkToAll, setApplyLinkToAll] = useState<boolean>(false);
   const [showParallelAdd, setShowParallelAdd] = useState(false);
   const [showParallelEdit, setShowParallelEdit] = useState(false);
@@ -1514,6 +1516,80 @@ export default function Admin() {
 
   return (
     <main className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex text-neutral-900 dark:text-neutral-50 transition-colors duration-350">
+      {/* Mobile Drawer Navigation Backdrop & Container */}
+      <div className={`fixed inset-0 z-50 flex lg:hidden transition-opacity duration-300 ${isMobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+        {/* Backdrop */}
+        <div 
+          className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+        
+        {/* Drawer Content */}
+        <aside className={`relative flex w-72 max-w-[85vw] flex-col bg-white dark:bg-neutral-900 p-4 border-r dark:border-white/10 shadow-2xl transition-transform duration-300 ease-in-out ${isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
+          <div className="flex items-center justify-between gap-2 mb-6">
+            <div className="flex items-center gap-2 overflow-hidden">
+              <img 
+                src="https://res.cloudinary.com/dc4h1odcj/image/upload/v1776916361/tsss/branding/tss-main-school/lau6cwcyaf9ssiosqylc.png" 
+                alt="Logo" 
+                className="h-9 w-9 rounded-xl object-contain bg-white p-0.5 border dark:border-neutral-800 shrink-0 shadow-sm"
+              />
+              <h1 className="text-xl font-bold">Smart Attendance</h1>
+            </div>
+            <button 
+              onClick={() => setIsMobileMenuOpen(false)} 
+              className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          
+          <nav className="space-y-4 flex-1 overflow-y-auto pr-1">
+            {moduleCategories.map(cat => {
+              const isCollapsed = collapsedCategories[cat.title];
+              return (
+                <div key={cat.title} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleCategory(cat.title)}
+                    className="w-full flex items-center justify-between text-xs font-extrabold text-amber-700/80 dark:text-amber-400/90 uppercase tracking-widest px-2.5 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-800/40 rounded-xl transition-all duration-200"
+                  >
+                    <span>{cat.title}</span>
+                    <ChevronRight size={14} className={`transition-transform duration-250 ${isCollapsed ? "" : "rotate-90 text-amber-600"}`} />
+                  </button>
+                  
+                  {!isCollapsed && (
+                    <div className="pl-1 space-y-0.5">
+                      {cat.items.map(m => {
+                        const IconComponent = itemIcons[m] || BookOpen;
+                        return (
+                          <button
+                            key={m}
+                            onClick={() => {
+                              navigateTab(m);
+                              setIsMobileMenuOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 rounded-xl transition-colors px-3 py-1.5 text-sm ${
+                              activeTab === m ? "bg-blue-600 text-white font-semibold shadow-sm" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                            }`}
+                          >
+                            <IconComponent size={18} className="shrink-0" />
+                            <span>{m}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
+          
+          <div className="mt-auto pt-4 border-t dark:border-neutral-800 text-[10px] text-neutral-400 text-center font-mono">
+            Developed by Mian Mudassar
+          </div>
+        </aside>
+      </div>
+
       {/* Sidebar navigation panel */}
       <aside className={`hidden lg:flex flex-col border-r bg-white dark:bg-neutral-900 dark:border-white/10 shrink-0 transition-all duration-350 ease-in-out ${isSidebarCollapsed ? "w-20 p-3" : "w-72 p-4"}`}>
         <div className="flex items-center justify-between gap-2 mb-6">
@@ -1589,9 +1665,18 @@ export default function Admin() {
       <section className="flex-1 p-4 md:p-8 overflow-auto max-h-screen">
         {/* Panel Header with Theme Toggler */}
         <div className="flex justify-between items-center mb-6">
-          <div>
-            <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Control Panel</p>
-            <h2 className="text-3xl font-extrabold">{activeTab}</h2>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 rounded-xl border bg-white dark:bg-neutral-900 dark:border-white/10 text-neutral-500 hover:text-neutral-900 dark:hover:text-white shadow-sm transition-all"
+              aria-label="Open menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <p className="text-xs text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider">Control Panel</p>
+              <h2 className="text-3xl font-extrabold">{activeTab}</h2>
+            </div>
           </div>
           <div className="flex gap-2.5 items-center">
             <button
